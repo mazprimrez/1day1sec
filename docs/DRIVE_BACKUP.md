@@ -83,6 +83,35 @@ interrupted run continues where it stopped.
 Backup is otherwise one-way: clips you **delete** on the phone are not deleted
 from Drive. Only the old copy of a clip you **moved** is removed (step 5).
 
+## When the connection drops
+
+A backup is around a hundred requests in a row on a phone's network, so something
+will occasionally go wrong part-way. The first version ended the whole run on the
+first dropped request, which with 82 clips is a real problem. Now:
+
+- **Retries.** Every Drive call that fails for a reason that can pass is tried again,
+  up to five tries in all, waiting 1, 2, 4 and 8 seconds in between (about 15 seconds
+  before giving up). That covers dropped or reset connections, timeouts, DNS failing
+  while the phone reconnects, Google answering 5xx, 408 or 429, and Drive's
+  "slow down" reply, which it sends as a 403 with the reason `userRateLimitExceeded`.
+  A rejected sign-in (401), a bad request, a missing file, a full Drive and
+  permission problems are **not** retried, since they would fail the same way again.
+  The rules are in `backup/Retry.kt`, unit-tested.
+- **No duplicates from a lost reply.** A connection that drops while the answer is on
+  its way back looks the same as one that dropped mid-upload, and the file may have
+  arrived. Before repeating an upload the app looks in the folder for a file with
+  that name *and* checksum and, if it is there, uses it. Creating a folder does the
+  same. Deleting a file that is already gone counts as success.
+- **The screen stays on** while a backup or restore runs (the phone may cut the
+  network when the screen turns off). Leaving the backup screen cancels the run.
+- **Nothing is lost if it still fails.** The next run skips what is already in Drive
+  (see "How a backup run works"), so tapping again carries on where it stopped. The
+  message says how many clips were already done and shows the system's own wording
+  in brackets, which is what to look at if the problem needs investigating.
+
+The retry loop and its rules are unit-tested. The real HTTP calls have not been
+tested against a server that drops connections on purpose.
+
 ## How a restore works
 
 1. Finds the folder and reads the clips in the month folders, plus any loose ones in
@@ -169,6 +198,8 @@ Installing the app on a *new phone* from the same computer does not change it.
 | "Google Drive API has not been used in project…" | Setup step 2 was skipped. The message includes the link to enable it. |
 | "Access blocked: …has not completed the Google verification process" | The account is not in the *Test users* list (step 3). |
 | "Google hasn't verified this app" | Normal in Testing mode. *Advanced → Go to 1day1sec (unsafe)*. |
+| "The connection to Google Drive was lost" part-way through | The network dropped for longer than the automatic retries cover (about 15 seconds). Tap again: it skips the clips already uploaded and carries on. If it keeps happening at the same point, note the system wording shown in brackets. |
+| "Google Drive is busy or not responding right now" | Google answered with a server error or "slow down" on every try. Wait a few minutes and tap again. |
 | Sign-in fails immediately on an emulator | Use an emulator image with the **Google Play** icon; images without it have no Play Services. |
 
 ## Files

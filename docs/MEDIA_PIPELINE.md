@@ -100,7 +100,12 @@ reel with dates switched off gets no overlay at all.
 
 Runtime grows linearly with clip count — roughly a second of encoding per few
 seconds of reel on current hardware. A year of clips is a multi-minute job, so
-the compile screen reports progress and can be cancelled.
+the compile screen reports progress, can be cancelled, and holds the screen on
+(`keepScreenOn`) while it works, so the phone does not slow or stop the job when
+the display would otherwise time out. The screen is released when the stitch
+finishes or is cancelled, or when the screen is left. The job still belongs to the
+screen's ViewModel, so leaving the app or the screen is not safe; a foreground
+service would be needed for that.
 
 ## Export
 

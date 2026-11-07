@@ -13,6 +13,8 @@ import com.onedayonesecond.AppContainer
 import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.backup.AuthOutcome
 import com.onedayonesecond.backup.DriveBackup
+import com.onedayonesecond.backup.DriveException
+import com.onedayonesecond.backup.Retry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -139,7 +141,7 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
             throw e
         } catch (e: Exception) {
             pending = null
-            _state.update { it.copy(phase = BackupPhase.IDLE, error = describe(e)) }
+            _state.update { it.copy(phase = BackupPhase.IDLE, error = describe(e, it.done, it.total)) }
         }
     }
 
@@ -184,6 +186,31 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
                 "${summary.onlyEncrypted} day${if (summary.onlyEncrypted == 1) " is" else "s are"} " +
                     "only in an older encrypted format and cannot be restored.",
             )
+        }
+    }
+
+    private fun describe(e: Exception, done: Int, total: Int): String {
+        // A run that stops part-way loses nothing: what is already in Drive is skipped
+        // next time. Saying so matters, because "failed" reads as "start over".
+        val carryOn = if (done > 0 && total > 0) {
+            " $done of $total clips were already done; tap again to carry on where it stopped."
+        } else {
+            ""
+        }
+        // The system's own wording is kept in brackets: not friendly, but it is what
+        // helps if the problem needs looking into.
+        val detail = e.message?.takeIf { it.isNotBlank() }?.let { " ($it)" }.orEmpty()
+
+        return when {
+            // Failed even after several retries, so the connection or Google is really down.
+            e is DriveException && Retry.isRetryable(e) ->
+                "Google Drive is busy or not responding right now.$carryOn$detail"
+            e is DriveException -> (e.message ?: "Google Drive returned an error.") + carryOn
+            e is IOException && done == 0 ->
+                "Could not reach Google Drive. Check the internet connection and try again.$detail"
+            e is IOException ->
+                "The connection to Google Drive was lost.$carryOn$detail"
+            else -> describe(e)
         }
     }
 

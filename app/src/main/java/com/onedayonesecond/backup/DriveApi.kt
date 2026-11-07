@@ -7,14 +7,26 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-/** A Drive request that came back with an HTTP error. */
-class DriveException(val httpCode: Int, message: String) : IOException(message)
+/**
+ * A Drive request that came back with an HTTP error. [reason] is Google's short code
+ * for what went wrong when it gave one, such as "userRateLimitExceeded".
+ */
+class DriveException(
+    val httpCode: Int,
+    message: String,
+    val reason: String? = null,
+) : IOException(message)
 
 /**
  * The Drive v3 calls the backup needs, over plain HTTPS.
  *
  * Every method blocks, so call them from Dispatchers.IO. Verbs are limited to
  * GET, POST and DELETE on purpose: HttpURLConnection on Android rejects PATCH.
+ *
+ * Every call retries a few times when it fails for a reason that can pass (see
+ * [Retry]), so a brief loss of connection does not end a long backup. Calls that
+ * create something check first whether an earlier try had already succeeded, so a
+ * reply that was lost on the way back does not leave a duplicate behind.
  */
 class DriveApi(private val accessToken: String) {
 
@@ -26,10 +38,13 @@ class DriveApi(private val accessToken: String) {
         val md5: String?,
     )
 
-    /** A folder with this name, or null if there is none. */
-    fun findFolder(name: String): String? {
+    /** A folder with this name, or null if there is none. Inside [parentId] if given. */
+    fun findFolder(name: String, parentId: String? = null): String? {
         require('\'' !in name) { "Folder name cannot contain a quote" }
-        val query = "name = '$name' and mimeType = '$FOLDER_MIME' and trashed = false"
+        val query = buildString {
+            append("name = '$name' and mimeType = '$FOLDER_MIME' and trashed = false")
+            if (parentId != null) append(" and '$parentId' in parents")
+        }
         val json = get("$FILES_URL?q=${enc(query)}&fields=${enc("files(id)")}&pageSize=1&spaces=drive")
         val files = json.getJSONArray("files")
         return if (files.length() > 0) files.getJSONObject(0).getString("id") else null
@@ -39,7 +54,13 @@ class DriveApi(private val accessToken: String) {
     fun createFolder(name: String, parentId: String? = null): String {
         val body = JSONObject().put("name", name).put("mimeType", FOLDER_MIME)
         if (parentId != null) body.put("parents", JSONArray().put(parentId))
-        return postJson("$FILES_URL?fields=id", body.toString()).getString("id")
+        return Retry.run(
+            // If an earlier try went through but its reply was lost, the folder is
+            // already there; making a second one would leave two with the same name.
+            recover = { findFolder(name, parentId) },
+        ) {
+            postJson("$FILES_URL?fields=id", body.toString()).getString("id")
+        }
     }
 
     /** Everything directly inside [folderId] (files and folders), following pagination. */
@@ -88,29 +109,48 @@ class DriveApi(private val accessToken: String) {
                 "--$boundary\r\nContent-Type: $mimeType\r\n\r\n"
             ).toByteArray()
         val tail = "\r\n--$boundary--".toByteArray()
+        val checksum = md5Hex(bytes)
 
-        val connection = open("$UPLOAD_URL?uploadType=multipart&fields=id", "POST")
-        connection.setRequestProperty("Content-Type", "multipart/related; boundary=$boundary")
-        connection.doOutput = true
-        connection.setFixedLengthStreamingMode(head.size + bytes.size + tail.size)
-        connection.outputStream.use { out ->
-            out.write(head)
-            out.write(bytes)
-            out.write(tail)
+        return Retry.run(
+            // A connection that drops while the reply is on its way back looks the same
+            // as one that dropped mid-upload. Look for the file before sending it again,
+            // so the same clip is never uploaded twice.
+            recover = { listChildren(folderId).firstOrNull { it.name == name && it.md5 == checksum }?.id },
+        ) {
+            val connection = open("$UPLOAD_URL?uploadType=multipart&fields=id", "POST")
+            connection.setRequestProperty("Content-Type", "multipart/related; boundary=$boundary")
+            connection.doOutput = true
+            connection.setFixedLengthStreamingMode(head.size + bytes.size + tail.size)
+            connection.outputStream.use { out ->
+                out.write(head)
+                out.write(bytes)
+                out.write(tail)
+            }
+            JSONObject(String(readBytes(connection))).getString("id")
         }
-        return JSONObject(String(readBytes(connection))).getString("id")
     }
 
-    fun download(fileId: String): ByteArray =
+    fun download(fileId: String): ByteArray = Retry.run {
         readBytes(open("$FILES_URL/$fileId?alt=media", "GET"))
+    }
 
     fun delete(fileId: String) {
-        readBytes(open("$FILES_URL/$fileId", "DELETE"))
+        Retry.run {
+            try {
+                readBytes(open("$FILES_URL/$fileId", "DELETE"))
+            } catch (e: DriveException) {
+                // Already gone — including by an earlier try whose reply was lost.
+                // Deleting is meant to end with the file not existing, and it does.
+                if (e.httpCode != 404) throw e
+            }
+        }
     }
 
     // --- plumbing -------------------------------------------------------------
 
-    private fun get(url: String): JSONObject = JSONObject(String(readBytes(open(url, "GET"))))
+    private fun get(url: String): JSONObject = Retry.run {
+        JSONObject(String(readBytes(open(url, "GET"))))
+    }
 
     private fun postJson(url: String, body: String): JSONObject {
         val connection = open(url, "POST")
@@ -136,7 +176,7 @@ class DriveApi(private val accessToken: String) {
                 return connection.inputStream.use { it.readBytes() }
             }
             val body = connection.errorStream?.use { String(it.readBytes()) }.orEmpty()
-            throw DriveException(code, errorMessage(code, body))
+            throw DriveException(code, errorMessage(code, body), errorReason(body))
         } finally {
             connection.disconnect()
         }
@@ -154,6 +194,11 @@ class DriveApi(private val accessToken: String) {
             else -> "Google Drive returned an error (HTTP $code)."
         }
     }
+
+    /** Google's short code for the first thing that went wrong, if the reply gave one. */
+    private fun errorReason(body: String): String? = runCatching {
+        JSONObject(body).getJSONObject("error").getJSONArray("errors").getJSONObject(0).getString("reason")
+    }.getOrNull()
 
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 

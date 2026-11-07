@@ -34,6 +34,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,6 +58,16 @@ fun CompileScreen(
 
     val player = remember { ExoPlayer.Builder(context).build() }
     DisposableEffect(Unit) { onDispose { player.release() } }
+
+    // Stitching a long reel takes minutes. If the screen turned off partway, the phone
+    // would slow the app down or stop it, so the screen is held on while it works,
+    // and let go as soon as it finishes, is cancelled, or this screen is left.
+    val view = LocalView.current
+    val stitching = state.phase == CompilePhase.COMPILING
+    DisposableEffect(stitching) {
+        view.keepScreenOn = stitching
+        onDispose { view.keepScreenOn = false }
+    }
 
     LaunchedEffect(state.reelFile) {
         val reel = state.reelFile
@@ -178,6 +189,10 @@ fun CompileScreen(
                 )
                 Text(
                     "Stitching ${state.clipCount} clips… ${(state.progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "Keep this screen open until it finishes.",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }

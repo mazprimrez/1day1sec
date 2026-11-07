@@ -24,9 +24,11 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -52,6 +54,14 @@ fun BackupScreen(
     }
 
     val busy = state.phase != BackupPhase.IDLE
+
+    // A backup is many uploads in a row. If the screen turns off partway the phone may
+    // cut the network, which was one way a long backup could end in "connection lost".
+    val view = LocalView.current
+    DisposableEffect(busy) {
+        view.keepScreenOn = busy
+        onDispose { view.keepScreenOn = false }
+    }
 
     Scaffold(
         topBar = {
@@ -101,6 +111,12 @@ fun BackupScreen(
                             modifier = Modifier.fillMaxWidth(),
                         )
                         Text("$verb ${state.done} of ${state.total}…", style = MaterialTheme.typography.bodySmall)
+                        Text(
+                            "Keep this screen open until it finishes. If the connection drops it " +
+                                "tries again by itself, and if it still fails you can tap again: " +
+                                "it carries on where it stopped.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
                     } else {
                         LinearProgressIndicator(Modifier.fillMaxWidth())
                         Text("Looking at what is in Drive…", style = MaterialTheme.typography.bodySmall)

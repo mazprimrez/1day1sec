@@ -124,7 +124,9 @@ and the one-time Google Cloud setup it needs before it will sign in.
   "Back up now". Clips go up as ordinary `.mp4` files, unencrypted, so anyone with
   access to your Google account can watch them. They are filed one folder per
   month: `1day1sec/2026-11/2026-11-07.mp4`. It only ever sees files it created
-  (`drive.file` scope).
+  (`drive.file` scope). A dropped connection is retried automatically, the screen
+  stays on during a backup, and a run that still fails can simply be tapped again:
+  it skips what is already uploaded and carries on.
 - **Restore from Drive** adds days that are in Drive but missing on the phone
   (for a new phone) and never overwrites a day already present.
 

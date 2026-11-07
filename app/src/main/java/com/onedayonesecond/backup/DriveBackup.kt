@@ -8,7 +8,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import java.security.MessageDigest
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -282,7 +281,3 @@ class DriveBackup(
         const val CAPTIONS_MIME = "application/json"
     }
 }
-
-/** Drive reports an MD5 for every binary file; matching it means "same bytes". Not used for security. */
-private fun md5Hex(bytes: ByteArray): String =
-    MessageDigest.getInstance("MD5").digest(bytes).joinToString("") { "%02x".format(it) }
