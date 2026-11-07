@@ -1,0 +1,26 @@
+# Build output and Gradle's local caches
+*.iml
+.gradle/
+build/
+.kotlin/
+.cxx/
+.externalNativeBuild/
+captures/
+
+# Machine-specific: the Android SDK path
+local.properties
+
+# Android Studio keeps per-user state here
+.idea/
+
+# Installable packages are build output
+*.apk
+*.aab
+
+# Never commit signing keys or their passwords
+*.jks
+*.keystore
+keystore.properties
+
+# macOS
+.DS_Store
