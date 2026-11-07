@@ -66,6 +66,11 @@ class DateLabelStyleTest {
     }
 
     @Test
+    fun `the caption is smaller than the date it sits above`() {
+        assertTrue(CAPTION_TEXT_SIZE_PX < DATE_TEXT_SIZE_PX)
+    }
+
+    @Test
     fun `font names and families are unique and non-empty`() {
         assertEquals(DateFont.entries.size, DateFont.entries.map { it.label }.toSet().size)
         assertEquals(DateFont.entries.size, DateFont.entries.map { it.family }.toSet().size)

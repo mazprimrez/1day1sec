@@ -11,10 +11,11 @@ import java.time.format.FormatStyle
 
 /**
  * Text sizes and distance from the frame edge, in pixels of the 720x1280 output frame.
- * The caption is a touch larger than the date it sits above.
+ * The caption is smaller than the date it sits above, so it reads as a note on
+ * the date rather than as the headline.
  */
 const val DATE_TEXT_SIZE_PX = 40
-const val CAPTION_TEXT_SIZE_PX = 44
+const val CAPTION_TEXT_SIZE_PX = 32
 const val DATE_MARGIN_PX = 36
 
 /** Locale-aware, e.g. "Nov 7, 2026" or "7 Nov 2026". Shared by the reel and the style preview. */

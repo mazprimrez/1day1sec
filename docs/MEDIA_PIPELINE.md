@@ -94,8 +94,9 @@ frame is simply cut off. So `Captions.wrap` (pure, unit-tested) breaks the capti
 into lines, measured with the real font, before it is handed over. An
 `AlignmentSpan` on the whole text keeps the lines aligned to each other on the
 chosen side; without it a shorter line would hug the left edge of a centred or
-right-aligned block. The caption is drawn a little larger than the date
-(`CAPTION_TEXT_SIZE_PX` against `DATE_TEXT_SIZE_PX`). A clip with no caption on a
+right-aligned block. The caption is drawn smaller than the date
+(`CAPTION_TEXT_SIZE_PX` of 32 against `DATE_TEXT_SIZE_PX` of 40), so a smaller font
+also fits more of it on each line. A clip with no caption on a
 reel with dates switched off gets no overlay at all.
 
 Runtime grows linearly with clip count — roughly a second of encoding per few

@@ -135,10 +135,10 @@ and the one-time Google Cloud setup it needs before it will sign in.
 - Reminder time is hardcoded in `Reminders.REMINDER_TIME`; no settings screen.
 - Drive backup has no automatic schedule — it runs when tapped.
 - Backup is one-way: deleting a clip on the phone does not delete it from Drive.
-- The date label's size and margin are constants in `DateLabelStyle.kt`
-  (`DATE_TEXT_SIZE_PX`, `DATE_MARGIN_PX`); there is no setting for them, nor for
-  its colour. Fonts are limited to what ships with Android; custom font files
-  are not bundled.
+- The date and caption sizes and the margin are constants in `DateLabelStyle.kt`
+  (`DATE_TEXT_SIZE_PX`, `CAPTION_TEXT_SIZE_PX`, `DATE_MARGIN_PX`); there is no
+  setting for them, nor for their colour. Fonts are limited to what ships with
+  Android; custom font files are not bundled.
 - Compile runs in the ViewModel scope, so backgrounding the app during a long
   stitch cancels it. A foreground service is the fix if reels get long.
 - Tests run on a plain JVM and cover logic that does not need the phone: how

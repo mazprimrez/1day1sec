@@ -107,7 +107,7 @@ private class ShadowStyleSpan(
 
 private const val PAD = " "
 
-// Sized for the 720x1280 frame. The caption is a little larger than the date.
+// Sized for the 720x1280 frame. The caption is smaller than the date.
 private const val SHADOW_RADIUS_PX = 6f
 private const val SHADOW_OFFSET_Y_PX = 2f
 private val SHADOW_COLOR = Color.argb(170, 0, 0, 0)
