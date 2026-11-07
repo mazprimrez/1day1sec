@@ -8,6 +8,7 @@ import com.onedayonesecond.data.AppDatabase
 import com.onedayonesecond.data.ClipRepository
 import com.onedayonesecond.data.ClipStorage
 import com.onedayonesecond.data.DateStyleStore
+import com.onedayonesecond.data.PendingDriveRemovals
 import com.onedayonesecond.media.ClipThumbnails
 import com.onedayonesecond.media.GalleryImporter
 import com.onedayonesecond.media.GalleryScanner
@@ -37,5 +38,6 @@ class AppContainer(context: Context) {
     val thumbnails by lazy { GalleryThumbnails(appContext) }
     val clipThumbnails by lazy { ClipThumbnails() }
     val driveAuth by lazy { DriveAuth(appContext) }
-    val driveBackup by lazy { DriveBackup(repository) }
+    val pendingDriveRemovals by lazy { PendingDriveRemovals(appContext) }
+    val driveBackup by lazy { DriveBackup(repository, pendingDriveRemovals) }
 }

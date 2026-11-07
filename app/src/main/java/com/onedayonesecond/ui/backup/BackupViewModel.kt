@@ -144,7 +144,9 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun describe(summary: DriveBackup.Summary): String {
-        if (summary.total == 0) return "Nothing to back up yet — record a second first."
+        if (summary.total == 0 && summary.removedFromDrive == 0) {
+            return "Nothing to back up yet — record a second first."
+        }
         return buildString {
             append("Done. ${summary.uploaded} new")
             if (summary.replaced > 0) append(", ${summary.replaced} updated")
@@ -153,6 +155,11 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
                 append(" Moved ${summary.movedToMonthFolders} older file")
                 append(if (summary.movedToMonthFolders == 1) "" else "s")
                 append(" into month folders.")
+            }
+            if (summary.removedFromDrive > 0) {
+                append(" Removed the old copy of ${summary.removedFromDrive} moved clip")
+                append(if (summary.removedFromDrive == 1) "" else "s")
+                append(" from Drive.")
             }
         }
     }

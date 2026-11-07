@@ -52,10 +52,21 @@ There is no local record of what was uploaded. Each run:
    same day in the top folder is deleted. The first version of the backup put
    everything flat in the top folder, and this tidies that up as it goes.
 
+5. **Moved clips.** Moving a clip to another date on the phone (press and hold a
+   day) leaves the clip's old day empty, but its copy in Drive would still be
+   there, and a restore would bring it back on the wrong day. So a move notes the
+   old day in a small local list (`PendingDriveRemovals`), and the backup deletes
+   that day's file from Drive once all the uploads are done, so the clip is safely
+   in Drive under its new day first. The note is cleared only after the deletion
+   worked, so a failed run simply tries again. If a clip is on that day again by
+   then (retaken, or moved back) nothing is deleted: the normal upload has already
+   made Drive match it.
+
 Because Drive is the source of truth, a run can be repeated safely and an
 interrupted run continues where it stopped.
 
-Backup is one-way: clips you delete on the phone are **not** deleted from Drive.
+Backup is otherwise one-way: clips you **delete** on the phone are not deleted
+from Drive. Only the old copy of a clip you **moved** is removed (step 5).
 
 ## How a restore works
 

@@ -12,16 +12,20 @@ import java.time.LocalDate
  * are disposable, and the compiled reel only becomes permanent once the user
  * exports it to MediaStore.
  */
-class ClipStorage(private val context: Context) {
+class ClipStorage(private val filesDir: File, private val cacheDir: File) {
+
+    // Taking plain folders (rather than only a Context) lets the file handling be
+    // unit-tested on a plain JVM with a temporary directory.
+    constructor(context: Context) : this(context.filesDir, context.cacheDir)
 
     private val clipsDir: File
-        get() = File(context.filesDir, "clips").apply { mkdirs() }
+        get() = File(filesDir, "clips").apply { mkdirs() }
 
     private val capturesDir: File
-        get() = File(context.cacheDir, "captures").apply { mkdirs() }
+        get() = File(cacheDir, "captures").apply { mkdirs() }
 
     private val reelsDir: File
-        get() = File(context.cacheDir, "reels").apply { mkdirs() }
+        get() = File(cacheDir, "reels").apply { mkdirs() }
 
     /** Stable, permanent location for a given day's trimmed second. */
     fun clipFile(date: LocalDate): File = File(clipsDir, "$date.mp4")

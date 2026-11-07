@@ -9,6 +9,7 @@ import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.AppContainer
 import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.data.ClipEntity
+import com.onedayonesecond.data.ClipMoveRules
 import com.onedayonesecond.data.ClipRepository
 import android.graphics.Bitmap
 import com.onedayonesecond.media.ClipThumbnails
@@ -16,15 +17,20 @@ import com.onedayonesecond.media.GalleryAccessLevel
 import com.onedayonesecond.media.GalleryScanner
 import com.onedayonesecond.media.GalleryVideo
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 
 data class HomeUiState(
     val month: YearMonth = YearMonth.now(),
@@ -38,6 +44,16 @@ data class HomeUiState(
     val galleryAccess: GalleryAccessLevel = GalleryAccessLevel.NONE,
 )
 
+/** A move waiting for the user to confirm that the clip already on [target] may be replaced. */
+data class MoveRequest(val clip: ClipEntity, val target: LocalDate)
+
+/** Kept apart from [HomeUiState], which is derived from the database, not set by hand. */
+data class MoveUiState(
+    val replaceRequest: MoveRequest? = null,
+    /** A one-off result to show the user, cleared with [HomeViewModel.messageShown]. */
+    val message: String? = null,
+)
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @UnstableApi
 class HomeViewModel(container: AppContainer) : ViewModel() {
@@ -45,6 +61,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
     private val repository: ClipRepository = container.repository
     private val scanner: GalleryScanner = container.galleryScanner
     private val clipThumbnails: ClipThumbnails = container.clipThumbnails
+    private val pendingRemovals = container.pendingDriveRemovals
+    private val _moveState = MutableStateFlow(MoveUiState())
+    val moveState: StateFlow<MoveUiState> = _moveState.asStateFlow()
     private val _month = MutableStateFlow(YearMonth.now())
     private val gallery = MutableStateFlow<Map<LocalDate, List<GalleryVideo>>>(emptyMap())
     private val galleryAccess = MutableStateFlow(GalleryAccessLevel.NONE)
@@ -108,7 +127,68 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         viewModelScope.launch { repository.deleteClip(clip) }
     }
 
+    /**
+     * Files [clip] under another day. If a clip is already there this does not move
+     * anything yet: it asks first, through [MoveUiState.replaceRequest].
+     */
+    fun moveClip(clip: ClipEntity, target: LocalDate) {
+        viewModelScope.launch { attemptMove(clip, target, replace = false) }
+    }
+
+    fun confirmReplace() {
+        val request = _moveState.value.replaceRequest ?: return
+        _moveState.update { it.copy(replaceRequest = null) }
+        viewModelScope.launch { attemptMove(request.clip, request.target, replace = true) }
+    }
+
+    fun cancelReplace() {
+        _moveState.update { it.copy(replaceRequest = null) }
+    }
+
+    fun messageShown() {
+        _moveState.update { it.copy(message = null) }
+    }
+
+    private suspend fun attemptMove(clip: ClipEntity, target: LocalDate, replace: Boolean) {
+        val check = ClipMoveRules.check(
+            from = clip.date,
+            to = target,
+            today = LocalDate.now(),
+            targetHasClip = repository.hasClipFor(target),
+        )
+        when (check) {
+            ClipMoveRules.Check.SAME_DAY -> return tell("That clip is already on this day.")
+            ClipMoveRules.Check.FUTURE -> return tell("A clip can't be moved to a day that hasn't happened yet.")
+            ClipMoveRules.Check.NEEDS_REPLACE ->
+                if (!replace) {
+                    _moveState.update { it.copy(replaceRequest = MoveRequest(clip, target)) }
+                    return
+                }
+            ClipMoveRules.Check.OK -> Unit
+        }
+
+        try {
+            // Noted before the move rather than after: if noting it fails, nothing has
+            // moved yet. And if the move then fails, the next backup sees a clip still
+            // on that day and just drops the note, deleting nothing.
+            pendingRemovals.add(clip.date)
+            repository.moveClip(clip, target, replaceExisting = replace)
+            showMonth(YearMonth.from(target)) // so the user sees where it went
+            tell("Moved to ${target.format(MESSAGE_DATE)}.")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            tell(e.message ?: "Could not move the clip.")
+        }
+    }
+
+    private fun tell(text: String) {
+        _moveState.update { it.copy(message = text) }
+    }
+
     companion object {
+        private val MESSAGE_DATE: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+
         val Factory = viewModelFactory {
             initializer {
                 val app = this[ViewModelProvider.AndroidViewModelFactory.APPLICATION_KEY] as OneDayApp

@@ -2,6 +2,7 @@ package com.onedayonesecond.backup
 
 import com.onedayonesecond.data.ClipEntity
 import com.onedayonesecond.data.ClipRepository
+import com.onedayonesecond.data.PendingDriveRemovals
 import com.onedayonesecond.media.VideoMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -19,14 +20,22 @@ import java.time.YearMonth
  * already there and compares checksums, so a run can be repeated safely and an
  * interrupted one simply continues on the next tap.
  */
-class DriveBackup(private val repository: ClipRepository) {
+class DriveBackup(
+    private val repository: ClipRepository,
+    private val pendingRemovals: PendingDriveRemovals,
+) {
 
-    /** [movedToMonthFolders] counts older flat-layout copies that were tidied up. */
+    /**
+     * [movedToMonthFolders] counts older flat-layout copies that were tidied up;
+     * [removedFromDrive] counts days whose clip was moved to another day on the phone
+     * and whose now-outdated copy was removed from Drive.
+     */
     data class Summary(
         val uploaded: Int,
         val replaced: Int,
         val alreadyBackedUp: Int,
         val movedToMonthFolders: Int = 0,
+        val removedFromDrive: Int = 0,
     ) {
         val total: Int get() = uploaded + replaced + alreadyBackedUp
     }
@@ -49,10 +58,17 @@ class DriveBackup(private val repository: ClipRepository) {
         onProgress: (done: Int, total: Int) -> Unit,
     ): Summary = withContext(Dispatchers.IO) {
         val clips = localClips()
-        if (clips.isEmpty()) return@withContext Summary(0, 0, 0)
+        val movedAway = pendingRemovals.all()
+        if (clips.isEmpty() && movedAway.isEmpty()) return@withContext Summary(0, 0, 0)
 
         val api = DriveApi(accessToken)
-        val rootId = api.findFolder(DriveLayout.ROOT_FOLDER) ?: api.createFolder(DriveLayout.ROOT_FOLDER)
+        val rootId = api.findFolder(DriveLayout.ROOT_FOLDER) ?: if (clips.isEmpty()) {
+            // Nothing was ever uploaded, so there is nothing to clean up either.
+            pendingRemovals.remove(movedAway)
+            return@withContext Summary(0, 0, 0)
+        } else {
+            api.createFolder(DriveLayout.ROOT_FOLDER)
+        }
         val rootChildren = api.listChildren(rootId)
 
         // Month folders that already exist, and clips left loose in the top folder by
@@ -108,7 +124,31 @@ class DriveBackup(private val repository: ClipRepository) {
             onProgress(index + 1, clips.size)
         }
 
-        Summary(uploaded, replaced, skipped, moved)
+        // Clips that were moved to another day on the phone: their old day's copy is
+        // now a duplicate that a restore would bring back on the wrong date. This runs
+        // after the uploads so the clip is safely in Drive under its new day first.
+        val localDays = clips.mapTo(HashSet()) { it.date }
+        var removed = 0
+        for (day in movedAway.sorted()) {
+            ensureActive()
+            // A clip is on that day again (retaken, or moved back), and the upload
+            // above has already made Drive match it.
+            if (day in localDays) continue
+
+            val name = DriveLayout.clipFileName(day)
+            val month = YearMonth.from(day)
+            val inMonthFolder = monthFolderIds[month]
+                ?.let { id -> listings.getOrPut(month) { api.listChildren(id) } }
+                .orEmpty()
+            val outdated = inMonthFolder.filter { it.name == name && !it.isFolder } +
+                looseByName[name].orEmpty()
+            outdated.forEach { api.delete(it.id) }
+            if (outdated.isNotEmpty()) removed++
+        }
+        // Cleared only now: if anything above failed, the next backup tries again.
+        pendingRemovals.remove(movedAway)
+
+        Summary(uploaded, replaced, skipped, moved, removed)
     }
 
     /**

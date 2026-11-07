@@ -69,6 +69,13 @@ and the one-time Google Cloud setup it needs before it will sign in.
   switch (on by default). The date is drawn when the reel is built; the stored
   clips themselves are never modified, so the switch can be flipped and the reel
   rebuilt at any time.
+- **Move a clip to another date.** Press and hold a day that has a clip, then
+  "Move to another date" and pick the right day (days that have not happened yet
+  are greyed out). For videos that came from a gallery or download and were filed
+  under the wrong date. If the new day already has a clip you are asked before it
+  is replaced. The calendar jumps to the new month so you can see where it went.
+  The next Drive backup also removes the old day's copy from Drive (see
+  `docs/DRIVE_BACKUP.md`), so a restore does not bring the clip back on the wrong day.
 - **Calendar thumbnails.** A day with a clip shows a frame from the middle of that
   clip, cropped square. Pictures are made on demand, a few at a time, and kept in
   a small memory cache (not on disk), so a month fills in over a moment after
@@ -116,10 +123,15 @@ and the one-time Google Cloud setup it needs before it will sign in.
   are not bundled.
 - Compile runs in the ViewModel scope, so backgrounding the app during a long
   stitch cancels it. A foreground service is the fix if reels get long.
-- Tests cover only pure logic, on a plain JVM: how backup files are named and
-  filed (`DriveLayoutTest`) and which gallery videos count and what day they
-  belong to (`GalleryRulesTest`). The trim and compile paths need instrumented
-  tests against real files; they cannot be meaningfully unit tested.
+- Tests run on a plain JVM and cover logic that does not need the phone: how
+  backup files are named and filed (`DriveLayoutTest`), which gallery videos count
+  and what day they belong to (`GalleryRulesTest`), the date caption's position
+  maths (`DateLabelStyleTest`), calendar thumbnail geometry (`ThumbnailRulesTest`),
+  and moving a clip between days (`ClipMoveRulesTest`, plus `ClipRepositoryMoveTest`,
+  which runs the real file handling against a temporary folder and an in-memory
+  stand-in for the database). The trim, compile, camera and Drive paths need
+  instrumented tests or a real account; they cannot be meaningfully unit tested,
+  and the Drive clean-up after a move has only been checked by reading it.
 - Videos that exist only in Google Photos' cloud cannot be detected by date.
   Google closed its library API to other apps on 31 March 2025, so the app can see
   only what is on the phone (which includes Google Photos videos that have not

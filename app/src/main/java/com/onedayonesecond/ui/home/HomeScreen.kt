@@ -37,6 +37,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -91,7 +93,12 @@ fun HomeScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val moveState by viewModel.moveState.collectAsStateWithLifecycle()
+    // Pressing and holding a day opens its options; each choice then opens its own dialog.
+    var optionsFor by remember { mutableStateOf<ClipEntity?>(null) }
+    var moving by remember { mutableStateOf<ClipEntity?>(null) }
     var pendingDelete by remember { mutableStateOf<ClipEntity?>(null) }
+    val snackbarHost = remember { SnackbarHostState() }
     var showDeniedHint by remember { mutableStateOf(false) }
 
     // Finding past days that have videos means reading the gallery index, which
@@ -107,6 +114,13 @@ fun HomeScreen(
     // is picked up. Without permission it quietly finds nothing.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshGallery() }
 
+    // Results of a move ("Moved to ...", or why it could not be).
+    LaunchedEffect(moveState.message) {
+        val text = moveState.message ?: return@LaunchedEffect
+        snackbarHost.showSnackbar(text)
+        viewModel.messageShown()
+    }
+
     val notificationLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { }
@@ -117,6 +131,7 @@ fun HomeScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHost) },
         topBar = {
             TopAppBar(
                 title = { Text("1day1sec") },
@@ -173,10 +188,44 @@ fun HomeScreen(
                 state = state,
                 onDayClick = onRecord,
                 onGalleryDayClick = onPickFromGallery,
-                onDayLongClick = { pendingDelete = it },
+                onDayLongClick = { optionsFor = it },
                 loadThumbnail = viewModel::thumbnailFor,
             )
         }
+    }
+
+    optionsFor?.let { clip ->
+        ClipOptionsDialog(
+            clip = clip,
+            onMove = {
+                moving = clip
+                optionsFor = null
+            },
+            onDelete = {
+                pendingDelete = clip
+                optionsFor = null
+            },
+            onDismiss = { optionsFor = null },
+        )
+    }
+
+    moving?.let { clip ->
+        MoveClipDatePicker(
+            clip = clip,
+            onMove = { target ->
+                viewModel.moveClip(clip, target)
+                moving = null
+            },
+            onDismiss = { moving = null },
+        )
+    }
+
+    moveState.replaceRequest?.let { request ->
+        ConfirmReplaceDialog(
+            target = request.target,
+            onReplace = viewModel::confirmReplace,
+            onDismiss = viewModel::cancelReplace,
+        )
     }
 
     pendingDelete?.let { clip ->
