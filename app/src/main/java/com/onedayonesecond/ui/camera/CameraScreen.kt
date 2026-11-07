@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -16,6 +17,7 @@ import androidx.camera.video.VideoCapture
 import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,6 +48,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -80,6 +83,12 @@ fun CameraScreen(
     var lensFacing by rememberSaveable { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
     // Only offer the switch once we know the device really has both cameras.
     var canFlip by remember { mutableStateOf(false) }
+
+    // The bound camera, needed to forward taps as focus requests; and the ring
+    // shown where the last tap landed.
+    var camera by remember { mutableStateOf<Camera?>(null) }
+    var focusRing by remember { mutableStateOf<FocusRing?>(null) }
+    var tapCount by remember { mutableStateOf(0L) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -157,8 +166,10 @@ fun CameraScreen(
         val preview = Preview.Builder().build().also {
             it.setSurfaceProvider(previewView.surfaceProvider)
         }
+        camera = null
+        focusRing = null
         provider.unbindAll()
-        provider.bindToLifecycle(
+        camera = provider.bindToLifecycle(
             lifecycleOwner,
             selector,
             preview,
@@ -175,6 +186,34 @@ fun CameraScreen(
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         if (cameraGranted) {
             AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+
+            // Tap anywhere on the picture to focus there. It sits above the preview
+            // but below the buttons, which are drawn later and so get their taps first.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        detectTapGestures { tap ->
+                            val bound = camera ?: return@detectTapGestures
+                            val id = ++tapCount
+                            focusRing = FocusRing(id, tap.x, tap.y, FocusOutcome.SEARCHING)
+                            focusAt(
+                                camera = bound,
+                                previewView = previewView,
+                                x = tap.x,
+                                y = tap.y,
+                                executor = ContextCompat.getMainExecutor(context),
+                            ) { outcome ->
+                                // Ignore a late answer for a tap that a newer one replaced.
+                                if (focusRing?.id == id) focusRing = focusRing?.copy(outcome = outcome)
+                            }
+                        }
+                    },
+            )
+            FocusRingOverlay(
+                ring = focusRing,
+                onFinished = { id -> if (focusRing?.id == id) focusRing = null },
+            )
         } else {
             PermissionPrompt(
                 onRequest = {

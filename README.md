@@ -104,6 +104,13 @@ and the one-time Google Cloud setup it needs before it will sign in.
 - **Front camera.** The camera screen shows a switch button when the device has
   both cameras. It is locked while recording. Front-camera clips are saved
   unmirrored, as other people would see you.
+- **Tap to focus.** Tapping the camera preview focuses (and sets exposure) at that
+  point and shows a ring there: white while it works, red if the camera could not
+  lock. The camera drops back to continuous autofocus by itself after a few
+  seconds. The app has to forward taps to the camera itself, because CameraX only
+  does this automatically when driven through a `CameraController`, which this
+  app does not use. Focus has a physical limit: the main lens of the phone this
+  was built on cannot focus closer than about 10 cm.
 - **Drive backup is opt-in and manual.** Nothing is uploaded until you tap
   "Back up now". Clips go up as ordinary `.mp4` files, unencrypted, so anyone with
   access to your Google account can watch them. They are filed one folder per
