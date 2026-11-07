@@ -1,5 +1,6 @@
 package com.onedayonesecond.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import java.io.File
@@ -16,6 +17,9 @@ data class ClipEntity(
     val filePath: String,
     val durationMs: Long,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Text drawn above the date on the reel. Empty means none. See [Captions]. */
+    @ColumnInfo(defaultValue = "''")
+    val caption: String = "",
 ) {
     val file: File get() = File(filePath)
 }

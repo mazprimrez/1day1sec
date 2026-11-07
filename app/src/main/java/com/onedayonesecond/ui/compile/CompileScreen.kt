@@ -117,7 +117,27 @@ fun CompileScreen(
                 )
             }
 
-            if (state.showDates) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Show captions",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = state.showCaptions,
+                    onCheckedChange = viewModel::setShowCaptions,
+                    enabled = state.phase != CompilePhase.COMPILING,
+                )
+            }
+            if (state.showCaptions) {
+                Text(
+                    "${state.captionCount} of ${state.clipCount} clip${if (state.clipCount == 1) "" else "s"} " +
+                        "have a caption. Press and hold a day on the calendar to add one.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            if (state.showDates || state.showCaptions) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         "${state.dateStyle.font.label} · ${state.dateStyle.edge.label} " +
@@ -198,6 +218,8 @@ fun CompileScreen(
     if (showStyleDialog) {
         DateStyleDialog(
             current = state.dateStyle,
+            showDates = state.showDates,
+            showCaptions = state.showCaptions,
             onApply = {
                 viewModel.setDateStyle(it)
                 showStyleDialog = false

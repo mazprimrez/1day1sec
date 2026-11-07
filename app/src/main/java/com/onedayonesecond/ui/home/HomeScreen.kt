@@ -96,6 +96,7 @@ fun HomeScreen(
     val moveState by viewModel.moveState.collectAsStateWithLifecycle()
     // Pressing and holding a day opens its options; each choice then opens its own dialog.
     var optionsFor by remember { mutableStateOf<ClipEntity?>(null) }
+    var captioning by remember { mutableStateOf<ClipEntity?>(null) }
     var moving by remember { mutableStateOf<ClipEntity?>(null) }
     var pendingDelete by remember { mutableStateOf<ClipEntity?>(null) }
     val snackbarHost = remember { SnackbarHostState() }
@@ -197,6 +198,10 @@ fun HomeScreen(
     optionsFor?.let { clip ->
         ClipOptionsDialog(
             clip = clip,
+            onCaption = {
+                captioning = clip
+                optionsFor = null
+            },
             onMove = {
                 moving = clip
                 optionsFor = null
@@ -206,6 +211,17 @@ fun HomeScreen(
                 optionsFor = null
             },
             onDismiss = { optionsFor = null },
+        )
+    }
+
+    captioning?.let { clip ->
+        CaptionDialog(
+            clip = clip,
+            onSave = { text ->
+                viewModel.setCaption(clip, text)
+                captioning = null
+            },
+            onDismiss = { captioning = null },
         )
     }
 

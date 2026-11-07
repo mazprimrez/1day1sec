@@ -58,6 +58,8 @@ class DriveLayoutTest {
         assertNull(DriveLayout.dateOfClip("2026-11-07.mov"))
         assertNull(DriveLayout.dateOfClip("2026-11-07"))
         assertNull(DriveLayout.dateOfClip("2026-11-07.1d1s"))
+        assertNull(DriveLayout.dateOfClip(DriveLayout.CAPTIONS_FILE))
+        assertNull(DriveLayout.dateOfEncryptedClip(DriveLayout.CAPTIONS_FILE))
     }
 
     @Test

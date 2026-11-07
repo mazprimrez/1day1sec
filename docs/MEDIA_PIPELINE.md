@@ -86,6 +86,18 @@ span, because the platform's own typeface span needs API 28 and minSdk is 26. On
 space either side of the text leaves room for the shadow, which is drawn outside
 the text's bounds and would otherwise be clipped.
 
+The overlay holds up to four lines: the clip's caption, if it has one, wrapped over
+at most three lines, and the date on the line below. Transformer's `TextOverlay`
+draws with an Android `StaticLayout` (checked in the 1.5.1 classes), which is what
+makes the line breaks work, but it does no wrapping of its own: text wider than the
+frame is simply cut off. So `Captions.wrap` (pure, unit-tested) breaks the caption
+into lines, measured with the real font, before it is handed over. An
+`AlignmentSpan` on the whole text keeps the lines aligned to each other on the
+chosen side; without it a shorter line would hug the left edge of a centred or
+right-aligned block. The caption is drawn a little larger than the date
+(`CAPTION_TEXT_SIZE_PX` against `DATE_TEXT_SIZE_PX`). A clip with no caption on a
+reel with dates switched off gets no overlay at all.
+
 Runtime grows linearly with clip count — roughly a second of encoding per few
 seconds of reel on current hardware. A year of clips is a multi-minute job, so
 the compile screen reports progress and can be cancelled.

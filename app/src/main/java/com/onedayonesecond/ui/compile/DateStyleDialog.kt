@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.onedayonesecond.media.CAPTION_TEXT_SIZE_PX
 import com.onedayonesecond.media.DATE_LABEL_FORMAT
 import com.onedayonesecond.media.DATE_MARGIN_PX
 import com.onedayonesecond.media.DATE_TEXT_SIZE_PX
@@ -48,8 +49,9 @@ import com.onedayonesecond.media.typeface
 import java.time.LocalDate
 
 /**
- * Lets the user pick the date caption's font and position, with a small preview of
- * a reel frame so the choice can be judged without building a reel.
+ * Lets the user pick the font and position of the text drawn on the reel (the caption
+ * and the date under it), with a small preview of a reel frame so the choice can be
+ * judged without building a reel. The preview shows only what is switched on.
  *
  * Choices are held in a draft and only applied with "Apply", because applying
  * discards an already-built reel.
@@ -58,6 +60,8 @@ import java.time.LocalDate
 @Composable
 fun DateStyleDialog(
     current: DateLabelStyle,
+    showDates: Boolean,
+    showCaptions: Boolean,
     onApply: (DateLabelStyle) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -65,14 +69,14 @@ fun DateStyleDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Date style") },
+        title = { Text("Text style") },
         text = {
             Column(
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    FramePreview(draft)
+                    FramePreview(draft, showDates, showCaptions)
                 }
 
                 Section("Font") {
@@ -145,7 +149,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  * Compose rather than by the video pipeline).
  */
 @Composable
-private fun FramePreview(style: DateLabelStyle) {
+private fun FramePreview(style: DateLabelStyle, showDates: Boolean, showCaptions: Boolean) {
     val previewWidth = 150.dp
     val scale = previewWidth.value / VideoSpec.WIDTH
 
@@ -176,17 +180,27 @@ private fun FramePreview(style: DateLabelStyle) {
             .padding((DATE_MARGIN_PX * scale).dp),
         contentAlignment = position,
     ) {
-        Text(
-            text = " ${LocalDate.now().format(DATE_LABEL_FORMAT)} ",
-            style = TextStyle(
-                color = Color.White,
-                fontSize = (DATE_TEXT_SIZE_PX * scale).sp,
-                fontFamily = remember(style.font) { FontFamily(style.font.typeface()) },
-                // The typeface already carries its own weight.
-                fontWeight = FontWeight.Normal,
-                // Same soft shadow the reel uses, in place of a background box.
-                shadow = Shadow(Color(0xAA000000), Offset(0f, 2f * scale), 6f * scale),
-            ),
+        val family = remember(style.font) { FontFamily(style.font.typeface()) }
+        fun textStyle(sizePx: Int) = TextStyle(
+            color = Color.White,
+            fontSize = (sizePx * scale).sp,
+            fontFamily = family,
+            // The typeface already carries its own weight.
+            fontWeight = FontWeight.Normal,
+            // Same soft shadow the reel uses, in place of a background box.
+            shadow = Shadow(Color(0xAA000000), Offset(0f, 2f * scale), 6f * scale),
         )
+
+        // The caption sits above the date, both lined up on the chosen side.
+        Column(
+            horizontalAlignment = when (style.align) {
+                DateAlign.LEFT -> Alignment.Start
+                DateAlign.CENTER -> Alignment.CenterHorizontally
+                DateAlign.RIGHT -> Alignment.End
+            },
+        ) {
+            if (showCaptions) Text(" Your caption ", style = textStyle(CAPTION_TEXT_SIZE_PX))
+            if (showDates) Text(" ${LocalDate.now().format(DATE_LABEL_FORMAT)} ", style = textStyle(DATE_TEXT_SIZE_PX))
+        }
     }
 }

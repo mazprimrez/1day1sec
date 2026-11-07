@@ -156,6 +156,7 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
                 append(if (summary.movedToMonthFolders == 1) "" else "s")
                 append(" into month folders.")
             }
+            if (summary.captionsUpdated) append(" Captions saved.")
             if (summary.removedFromDrive > 0) {
                 append(" Removed the old copy of ${summary.removedFromDrive} moved clip")
                 append(if (summary.removedFromDrive == 1) "" else "s")

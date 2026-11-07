@@ -80,11 +80,20 @@ and the one-time Google Cloud setup it needs before it will sign in.
   clip, cropped square. Pictures are made on demand, a few at a time, and kept in
   a small memory cache (not on disk), so a month fills in over a moment after
   opening it. If a clip cannot be read the day keeps its plain coloured tile.
-- **Date style.** "Change style" opens a dialog with a live preview to pick the
+- **Captions.** Press and hold a day that has a clip and choose "Add caption" (or
+  "Edit caption") to write up to 80 characters for it. On the reel it is drawn
+  above the date, wrapped over at most three lines, in the same font and position
+  as the date; a caption that would not fit ends with "…". A "Show captions"
+  switch on the compile screen turns them on or off, and says how many of the
+  clips in the range have one. Taking a day again, or moving its clip to another
+  day, keeps the caption. Saving it empty removes it. Captions are backed up too,
+  in a small `captions.json` file in the Drive folder (see `docs/DRIVE_BACKUP.md`).
+- **Text style.** "Change style" opens a dialog with a live preview to pick the
   font (seven built-in Android families), the side (left, center, right) and the
-  edge (top or bottom). The default is the original bottom-left. There is no
-  background box; a soft shadow keeps the white text readable on bright footage.
-  The choice is remembered, and changing it discards a reel that is already built.
+  edge (top or bottom) for the caption and date together. The default is the
+  original bottom-left. There is no background box; a soft shadow keeps the white
+  text readable on bright footage. The choice is remembered, and changing it
+  discards a reel that is already built.
 - **Use an existing video.** The photo-library button on the camera screen opens
   Android's Photo Picker (gallery, plus Google Photos where the phone supports
   it; no storage permission needed). The chosen video is copied into app cache and
@@ -136,9 +145,13 @@ and the one-time Google Cloud setup it needs before it will sign in.
   maths (`DateLabelStyleTest`), calendar thumbnail geometry (`ThumbnailRulesTest`),
   and moving a clip between days (`ClipMoveRulesTest`, plus `ClipRepositoryMoveTest`,
   which runs the real file handling against a temporary folder and an in-memory
-  stand-in for the database). The trim, compile, camera and Drive paths need
-  instrumented tests or a real account; they cannot be meaningfully unit tested,
-  and the Drive clean-up after a move has only been checked by reading it.
+  stand-in for the database), captions (`CaptionsTest` for tidying and wrapping,
+  `ClipRepositoryCaptionTest`, and `CaptionSyncTest` for the Drive merge). The
+  trim, compile, camera and Drive paths need instrumented tests or a real account;
+  they cannot be meaningfully unit tested, and the Drive clean-up after a move and
+  the captions file have only been checked by reading them. The version 1 to 2
+  database migration was checked by running its SQL on a copy of the old schema,
+  not through Room on a device.
 - Videos that exist only in Google Photos' cloud cannot be detected by date.
   Google closed its library API to other apps on 31 March 2025, so the app can see
   only what is on the phone (which includes Google Photos videos that have not

@@ -30,7 +30,10 @@ month's clips named by day:
   2026-11/
     2026-11-01.mp4
     2026-11-02.mp4
+  captions.json
 ```
+
+`captions.json` holds the captions the user wrote for their clips (see below).
 
 The day is always read from the file name, never from the folder, so a file that
 ends up in the wrong folder is still restored to the right day. The layout lives
@@ -62,6 +65,18 @@ There is no local record of what was uploaded. Each run:
    then (retaken, or moved back) nothing is deleted: the normal upload has already
    made Drive match it.
 
+6. **Captions.** A clip's caption lives in the app's database, not inside its `.mp4`,
+   so it would be lost on a restore. The backup keeps the captions in one small,
+   readable JSON file next to the month folders, from day to caption. It is a
+   **merge**, not a copy of the phone: captions of days the phone has no clip for are
+   kept as they are in Drive, so tapping "Back up now" on a new phone that has a
+   single clip does not wipe a year of captions. For a day the phone does have, the
+   phone wins (a caption changed or cleared here is saved), and the old day of a
+   moved clip loses its caption (step 5). The file is only written when its content
+   changed, found by comparing checksums like the clips. A failed download of the
+   existing file fails the backup instead of being treated as "no captions yet",
+   which would overwrite the real file with the phone's partial one.
+
 Because Drive is the source of truth, a run can be repeated safely and an
 interrupted run continues where it stopped.
 
@@ -73,9 +88,14 @@ from Drive. Only the old copy of a clip you **moved** is removed (step 5).
 1. Finds the folder and reads the clips in the month folders, plus any loose ones in
    the top folder from the first layout. If a day is in both, the month folder wins.
 2. For each day in Drive that is **not** on the phone: downloads it, checks that it
-   really plays as a video, and adds it to the calendar.
-3. Days already on the phone are never touched. A file that is not a playable video
-   is counted as "could not be read" and skipped without stopping the rest.
+   really plays as a video, and adds it to the calendar. A file that is not a
+   playable video is counted as "could not be read" and skipped without stopping
+   the rest.
+3. Each restored day also gets its caption from `captions.json`, if there is one. A
+   captions file with damaged content is skipped rather than failing the clips; a
+   network error while fetching it fails the restore like any other, and running
+   it again continues.
+4. Days already on the phone are never touched, captions included.
 
 Days that exist only as `.1d1s` files — a short-lived encrypted version of the
 backup — cannot be opened any more. Restore reports how many there are instead of

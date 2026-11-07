@@ -1,8 +1,5 @@
 package com.onedayonesecond.data
 
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -17,30 +14,6 @@ import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
-
-/** An in-memory stand-in for the Room table, so the real file handling can run on a plain JVM. */
-private class FakeClipDao : ClipDao {
-    val rows = MutableStateFlow<Map<LocalDate, ClipEntity>>(emptyMap())
-
-    override fun observeAll(): Flow<List<ClipEntity>> = rows.map { it.values.sortedBy(ClipEntity::date) }
-    override fun observeBetween(start: LocalDate, end: LocalDate): Flow<List<ClipEntity>> =
-        rows.map { all -> all.values.filter { it.date in start..end }.sortedBy(ClipEntity::date) }
-
-    override suspend fun getBetween(start: LocalDate, end: LocalDate) =
-        rows.value.values.filter { it.date in start..end }.sortedBy(ClipEntity::date)
-
-    override suspend fun getAll() = rows.value.values.sortedBy(ClipEntity::date)
-    override suspend fun getByDate(date: LocalDate) = rows.value[date]
-    override suspend fun existsForDate(date: LocalDate) = date in rows.value
-    override suspend fun earliestDate() = rows.value.keys.minOrNull()
-    override suspend fun upsert(clip: ClipEntity) {
-        rows.value = rows.value + (clip.date to clip)
-    }
-
-    override suspend fun delete(clip: ClipEntity) {
-        rows.value = rows.value - clip.date
-    }
-}
 
 class ClipRepositoryMoveTest {
 

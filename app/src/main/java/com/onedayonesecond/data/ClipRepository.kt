@@ -33,9 +33,18 @@ class ClipRepository(
     /**
      * Moves a freshly trimmed file into its permanent per-day slot and records
      * it. Re-recording a day overwrites both the file and the row.
+     *
+     * @param caption the caption to set, or null to keep whatever the day already has,
+     * so taking a day again does not silently throw away text the user typed for it.
      */
-    suspend fun saveClip(date: LocalDate, trimmedFile: File, durationMs: Long): ClipEntity =
+    suspend fun saveClip(
+        date: LocalDate,
+        trimmedFile: File,
+        durationMs: Long,
+        caption: String? = null,
+    ): ClipEntity =
         withContext(Dispatchers.IO) {
+            val kept = caption?.let(Captions::normalize) ?: dao.getByDate(date)?.caption.orEmpty()
             val destination = storage.clipFile(date)
             if (destination.exists()) destination.delete()
             if (!trimmedFile.renameTo(destination)) {
@@ -46,8 +55,16 @@ class ClipRepository(
                 date = date,
                 filePath = destination.absolutePath,
                 durationMs = durationMs,
+                caption = kept,
             ).also { dao.upsert(it) }
         }
+
+    /** Sets, changes or (with blank text) removes a day's caption. Returns what was stored. */
+    suspend fun setCaption(date: LocalDate, caption: String): String {
+        val stored = Captions.normalize(caption)
+        dao.setCaption(date, stored)
+        return stored
+    }
 
     /**
      * Moves a clip to another day, for videos that were filed under the wrong date.
@@ -78,8 +95,10 @@ class ClipRepository(
             date = target,
             filePath = destination.absolutePath,
             durationMs = clip.durationMs,
-            // When it was recorded does not change by filing it under another day.
+            // When it was recorded does not change by filing it under another day,
+            // and the caption belongs to the clip, so it goes with it.
             createdAt = clip.createdAt,
+            caption = clip.caption,
         )
         dao.upsert(moved)
         dao.delete(clip)

@@ -36,6 +36,9 @@ data class CompileUiState(
     val reelFile: File? = null,
     val exportedName: String? = null,
     val showDates: Boolean = true,
+    val showCaptions: Boolean = true,
+    /** How many of the [clipCount] clips in the range have a caption. */
+    val captionCount: Int = 0,
     val dateStyle: DateLabelStyle = DateLabelStyle(),
     val error: String? = null,
 )
@@ -83,6 +86,19 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun setShowCaptions(show: Boolean) {
+        _state.update {
+            it.copy(
+                showCaptions = show,
+                // A reel built with the old setting no longer matches the toggle.
+                phase = CompilePhase.IDLE,
+                reelFile = null,
+                exportedName = null,
+                progress = 0f,
+            )
+        }
+    }
+
     fun setDateStyle(style: DateLabelStyle) {
         if (style == _state.value.dateStyle) return
         _state.update {
@@ -101,8 +117,10 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
     private fun refreshCount() {
         viewModelScope.launch {
             val (start, end) = resolveRange(_state.value.range)
-            val count = container.repository.clipsBetween(start, end).size
-            _state.update { it.copy(clipCount = count) }
+            val clips = container.repository.clipsBetween(start, end)
+            _state.update {
+                it.copy(clipCount = clips.size, captionCount = clips.count { clip -> clip.caption.isNotEmpty() })
+            }
         }
     }
 
@@ -123,9 +141,10 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
 
                 val output = container.storage.newReelFile()
                 container.compiler.compile(
-                    clips = clips.map { DatedClip(it.date, it.file) },
+                    clips = clips.map { DatedClip(it.date, it.file, it.caption) },
                     output = output,
                     showDates = _state.value.showDates,
+                    showCaptions = _state.value.showCaptions,
                     dateStyle = _state.value.dateStyle,
                     onProgress = { fraction ->
                         _state.update { it.copy(progress = fraction) }

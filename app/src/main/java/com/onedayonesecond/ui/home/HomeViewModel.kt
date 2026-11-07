@@ -135,6 +135,20 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         viewModelScope.launch { attemptMove(clip, target, replace = false) }
     }
 
+    /** Sets, changes or (with blank text) removes the caption drawn above [clip]'s date on the reel. */
+    fun setCaption(clip: ClipEntity, text: String) {
+        viewModelScope.launch {
+            try {
+                val stored = repository.setCaption(clip.date, text)
+                tell(if (stored.isEmpty()) "Caption removed." else "Caption saved.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                tell(e.message ?: "Could not save the caption.")
+            }
+        }
+    }
+
     fun confirmReplace() {
         val request = _moveState.value.replaceRequest ?: return
         _moveState.update { it.copy(replaceRequest = null) }

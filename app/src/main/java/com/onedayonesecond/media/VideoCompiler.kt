@@ -18,8 +18,8 @@ import com.google.common.collect.ImmutableList
 import java.io.File
 import java.time.LocalDate
 
-/** A stored clip together with the day it belongs to. */
-data class DatedClip(val date: LocalDate, val file: File)
+/** A stored clip together with the day it belongs to and its caption (empty for none). */
+data class DatedClip(val date: LocalDate, val file: File, val caption: String = "")
 
 /**
  * Stitches daily clips into a single reel, in the order given.
@@ -31,13 +31,16 @@ class VideoCompiler(private val context: Context) {
      * @param clips source clips, already in chronological order.
      * @param output destination file for the reel.
      * @param showDates burn each clip's date into the frame.
-     * @param dateStyle font and position of that date; ignored when [showDates] is false.
+     * @param showCaptions burn each clip's caption, if it has one, above the date.
+     * @param dateStyle font and position of the date and caption text; ignored when both
+     * are switched off.
      * @param onProgress fraction complete, 0f..1f.
      */
     suspend fun compile(
         clips: List<DatedClip>,
         output: File,
         showDates: Boolean = true,
+        showCaptions: Boolean = true,
         dateStyle: DateLabelStyle = DateLabelStyle(),
         onProgress: (Float) -> Unit = {},
     ) {
@@ -54,7 +57,7 @@ class VideoCompiler(private val context: Context) {
                         Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP,
                     ),
                 )
-                if (showDates) add(dateOverlay(clip.date, dateStyle))
+                textOverlay(clip, showDates, showCaptions, dateStyle)?.let(::add)
             }
 
             EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(clip.file)))
@@ -76,17 +79,26 @@ class VideoCompiler(private val context: Context) {
     }
 
     /**
-     * A small caption pinned to the chosen edge and side of the frame.
+     * The caption and date, pinned to the chosen edge and side of the frame. Null when
+     * there is nothing to show for this clip, so a clip without a caption on a reel
+     * with dates switched off gets no overlay at all.
      *
      * Anchors are in normalised device coordinates: (-1, -1) is the bottom-left
      * corner. The overlay's own anchor point (its corner or edge-midpoint on the
      * aligned side) is pinned to a point slightly inside the frame, which gives an
      * even margin on both axes. See [DateLabelStyle] for the arithmetic.
      */
-    private fun dateOverlay(date: LocalDate, style: DateLabelStyle): OverlayEffect {
-        // One space each side leaves room for the soft shadow, which is drawn
-        // outside the text's own bounds and would otherwise be clipped.
-        val label = dateLabelText(" ${date.format(DATE_LABEL_FORMAT)} ", style, DATE_TEXT_SIZE_PX)
+    private fun textOverlay(
+        clip: DatedClip,
+        showDates: Boolean,
+        showCaptions: Boolean,
+        style: DateLabelStyle,
+    ): OverlayEffect? {
+        val label = overlayLabelText(
+            caption = if (showCaptions) clip.caption else null,
+            dateText = if (showDates) clip.date.format(DATE_LABEL_FORMAT) else null,
+            style = style,
+        ) ?: return null
 
         val (overlayX, overlayY) = style.overlayAnchor
         val (frameX, frameY) = style.frameAnchor(DATE_MARGIN_PX, VideoSpec.WIDTH, VideoSpec.HEIGHT)

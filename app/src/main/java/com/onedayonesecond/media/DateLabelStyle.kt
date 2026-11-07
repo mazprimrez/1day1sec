@@ -9,8 +9,12 @@ import java.time.format.FormatStyle
  * (typefaces, spans) lives in DateLabelSpans.kt.
  */
 
-/** Caption size and distance from the frame edge, in pixels of the 720x1280 output frame. */
+/**
+ * Text sizes and distance from the frame edge, in pixels of the 720x1280 output frame.
+ * The caption is a touch larger than the date it sits above.
+ */
 const val DATE_TEXT_SIZE_PX = 40
+const val CAPTION_TEXT_SIZE_PX = 44
 const val DATE_MARGIN_PX = 36
 
 /** Locale-aware, e.g. "Nov 7, 2026" or "7 Nov 2026". Shared by the reel and the style preview. */

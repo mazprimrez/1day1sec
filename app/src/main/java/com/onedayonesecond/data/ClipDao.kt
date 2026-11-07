@@ -34,6 +34,9 @@ interface ClipDao {
     @Upsert
     suspend fun upsert(clip: ClipEntity)
 
+    @Query("UPDATE clips SET caption = :caption WHERE date = :date")
+    suspend fun setCaption(date: LocalDate, caption: String)
+
     @Delete
     suspend fun delete(clip: ClipEntity)
 }

@@ -14,6 +14,7 @@ import java.time.YearMonth
  *   2026-11/
  *     2026-11-01.mp4
  *     2026-11-02.mp4
+ *   captions.json
  * ```
  *
  * One folder per month, named `yyyy-MM` so they sort chronologically, holding that
@@ -24,6 +25,9 @@ import java.time.YearMonth
 object DriveLayout {
 
     const val ROOT_FOLDER = "1day1sec"
+
+    /** Holds the clips' captions, which live in the app's database rather than in the videos. */
+    const val CAPTIONS_FILE = "captions.json"
 
     private const val CLIP_EXT = ".mp4"
 
