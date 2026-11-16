@@ -15,7 +15,7 @@ writing the letters).
 
 ![Three screens of Kilasan. Days: November as a calendar with a tile for each day that has a second, today outlined, and an Add to today button. Add: record today's second, write, voice note, photo, or draw with S Pen. Reel: choose the days, the text on each second and the Google Drive backup, then Make my reel.](docs/screenshots/screens-tabs.png)
 
-![Three more screens. A day: the day's second with its mood, caption and place, then entries: writing, a voice note, a notebook page, a pen page and photos. A letter: a title, a quote from the week's entries, each day's mood, what happened, a note, what changed since last week and two things to try. Year in pixels: one square per day of 2026 coloured by mood, with a count of each mood and a Download PNG button.](docs/screenshots/screens-pages.png)
+![Three more screens, each showing the top of a longer page. A day: the day's second with its mood, caption and place, then the first entries: writing, a voice note and a notebook page. A letter: a title, a quote from the week's entries, each day's mood and what happened. Year in pixels: one square per day of 2026, coloured by mood.](docs/screenshots/screens-pages.png)
 
 These are the screens as designed, with made-up entries, not captures from a phone.
 In the app the pink tiles are frames from your own videos and photos.
@@ -301,54 +301,3 @@ from source is covered in [docs/BUILDING.md](docs/BUILDING.md).
 - **Restore from Drive** adds days that are in Drive but missing on the phone
   (for a new phone) and never overwrites a day already present. For the journal,
   "missing" means the phone has no mood, place or entry at all for that day.
-
-## Not done yet
-
-- Reminder time is hardcoded in `Reminders.REMINDER_TIME`; no settings screen.
-- Drive backup has no automatic schedule — it runs when tapped.
-- Backup is one-way: deleting a clip on the phone does not delete it from Drive.
-- The date and caption sizes and the margin are constants in `DateLabelStyle.kt`
-  (`DATE_TEXT_SIZE_PX`, `CAPTION_TEXT_SIZE_PX`, `DATE_MARGIN_PX`); there is no
-  setting for them, nor for their colour. Fonts are limited to what ships with
-  Android; custom font files are not bundled.
-- Making a reel runs in the ViewModel scope, so backgrounding the app during a long
-  stitch cancels it. A foreground service is the fix if reels get long.
-- The journal work (everything in [JOURNAL_DESIGN.md](JOURNAL_DESIGN.md)) has been
-  run on one phone only. There, voice notes and pages are typed out through the
-  deployed backend. A letter written from the app, and a restore onto a second
-  phone, have not been tried yet.
-- Typing out and recaps need the AI backend (`backend/`) deployed and its address
-  set in `local.properties`; without that nothing is typed out and no recap is
-  written. See [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md).
-- Light theme only. The app ignores the phone's dark mode.
-- Deleting an entry (writing, voice note, photo) is confirmed first but cannot be
-  undone; only seconds go through Recently deleted.
-- Six screens from the design canvas are in `docs/screenshots/`, as two pictures. The
-  rest (camera, trim, month and year letters, the dialogs) have not been exported.
-- A recap is written once. Entries added to a week after its letter was written are
-  not reflected, and there is no "write it again".
-- Tests run on a plain JVM and cover logic that does not need the phone: how
-  backup files are named and filed (`DriveLayoutTest`), which gallery videos count
-  and what day they belong to (`GalleryRulesTest`), the date caption's position
-  maths (`DateLabelStyleTest`), calendar thumbnail geometry (`ThumbnailRulesTest`),
-  and moving a clip between days (`ClipMoveRulesTest`, plus `ClipRepositoryMoveTest`,
-  which runs the real file handling against a temporary folder and an in-memory
-  stand-in for the database), captions (`CaptionsTest` for tidying and wrapping,
-  `ClipRepositoryCaptionTest`, and `CaptionSyncTest` for the Drive merge), the
-  trash (`ClipRepositoryTrashTest`: delete, undo, replace, restore, the 30-day
-  purge), recap periods and when they are due (`RecapPeriodTest`), the journal's
-  arithmetic and JSON (`JournalMathTest`: quote checking, stats, places, pixels,
-  recap content and the request to the backend), and the journal's backup files
-  and merge rule (`JournalFileTest`). The
-  trim, compile, camera and Drive paths need instrumented tests or a real account;
-  they cannot be meaningfully unit tested, and the Drive clean-up after a move and
-  the captions file have only been checked by reading them. The version 1 to 2
-  database migration was checked by running its SQL on a copy of the old schema,
-  not through Room on a device.
-- Videos that exist only in Google Photos' cloud cannot be detected by date.
-  Google closed its library API to other apps on 31 March 2025, so the app can see
-  only what is on the phone (which includes Google Photos videos that have not
-  been freed from the device). For cloud-only videos use the picker button on the
-  camera screen, which can reach Google Photos but cannot be searched by date.
-- No "fill every highlighted day automatically" — each day still needs you to
-  choose the video and the second.
