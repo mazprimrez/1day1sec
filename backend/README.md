@@ -1,0 +1,102 @@
+# Journal backend
+
+A small FastAPI service for Cloud Run. It sits between the app and Gemini on Vertex AI
+and does three things: types out voice notes, types out notebook and pen pages, and
+writes the weekly, monthly and yearly recaps. What the app sends and gets back is in
+[docs/JOURNAL_BACKEND.md](../docs/JOURNAL_BACKEND.md).
+
+| Path | What lives there |
+| --- | --- |
+| `app/settings.py` | Everything read from the environment, including the model |
+| `app/auth.py` | The Google sign-in check (access token or ID token): one allowed account |
+| `app/model.py` | The one call to Gemini on Vertex AI |
+| `app/transcription.py` | `transcribe(audio, mime_type)`: the only place that knows who transcribes |
+| `app/extraction.py` | Page image to text |
+| `app/recap.py` | Recap request, reply shape and the quote check |
+| `prompts/recap.md` | The recap prompt. Edit it and redeploy; no code changes |
+| `tests/samples/` | A sample week, month and year of entries |
+
+## Settings
+
+| Variable | Needed | What it is |
+| --- | --- | --- |
+| `GEMINI_MODEL` | no | The model for all three endpoints. Default `gemini-3.5-flash-lite` |
+| `ALLOWED_EMAIL` | yes | The one Google account that may use the service |
+| `GOOGLE_CLIENT_ID` | yes | The OAuth client ID the app's Google tokens are issued to: the app's Android client. Several can be given, separated by commas |
+| `GOOGLE_CLOUD_PROJECT` | yes | The project whose Vertex AI is called |
+| `GOOGLE_CLOUD_LOCATION` | no | Vertex AI location. Default `global` |
+
+There is no API key. Vertex AI is called as the service account the service runs as.
+The service refuses to start without `ALLOWED_EMAIL` and `GOOGLE_CLIENT_ID`.
+
+## Changing the model
+
+One value. On a running service:
+
+```
+gcloud run services update journal-backend --region asia-southeast2 \
+  --update-env-vars GEMINI_MODEL=the-new-model-id
+```
+
+`GET /health` answers `{"ok": true, "model": "…"}` without signing in, so you can see
+which model a deployment uses.
+
+## Tests
+
+```
+cd backend
+uv venv --python 3.12 .venv
+uv pip install --python .venv/bin/python -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+The tests use a stand-in for the model and for Google's token check, so they need no
+account and send nothing anywhere.
+
+## Deploy to Cloud Run
+
+Once per project: enable the APIs, and make a service account that may call Vertex AI
+and nothing else.
+
+```
+PROJECT=your-project-id
+
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
+  artifactregistry.googleapis.com aiplatform.googleapis.com --project $PROJECT
+
+gcloud iam service-accounts create journal-backend --project $PROJECT
+
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member serviceAccount:journal-backend@$PROJECT.iam.gserviceaccount.com \
+  --role roles/aiplatform.user
+```
+
+Then, from the repository root, each time you deploy:
+
+```
+gcloud run deploy journal-backend \
+  --source backend \
+  --project $PROJECT \
+  --region asia-southeast2 \
+  --service-account journal-backend@$PROJECT.iam.gserviceaccount.com \
+  --allow-unauthenticated \
+  --max-instances 2 \
+  --timeout 120 \
+  --set-env-vars GEMINI_MODEL=gemini-3.5-flash-lite,ALLOWED_EMAIL=you@example.com,GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com,GOOGLE_CLOUD_PROJECT=$PROJECT,GOOGLE_CLOUD_LOCATION=global
+```
+
+`--allow-unauthenticated` opens Cloud Run's own gate only. Cloud Run's gate cannot
+check a Google sign-in from a phone app, so the service checks the Google token itself
+on every request, and that is what keeps everyone else out.
+
+The command prints the service's address. Put it in the app's `local.properties` as
+`journal.backend.url`.
+
+## Run it on this machine
+
+```
+gcloud auth application-default login
+ALLOWED_EMAIL=you@example.com GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com \
+GOOGLE_CLOUD_PROJECT=your-project-id \
+  .venv/bin/uvicorn app.main:create_app --factory --port 8080
+```

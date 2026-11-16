@@ -24,3 +24,8 @@ keystore.properties
 
 # macOS
 .DS_Store
+
+# The backend's Python environment and caches
+backend/.venv/
+__pycache__/
+.pytest_cache/
