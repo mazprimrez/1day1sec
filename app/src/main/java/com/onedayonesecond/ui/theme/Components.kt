@@ -46,7 +46,6 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Side margin of every screen. */
@@ -315,12 +314,6 @@ fun appTextFieldColors() = OutlinedTextFieldDefaults.colors(
     errorBorderColor = Color(0xFF6E2445),
     errorSupportingTextColor = Color(0xFF6E2445),
 )
-
-/** A column of things with the same gap between them. */
-@Composable
-fun Stack(gap: Dp, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(gap), content = content)
-}
 
 /**
  * A dialog in the app's style: paper with a hairline edge instead of a shadow, a

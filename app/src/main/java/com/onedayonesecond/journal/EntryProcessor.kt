@@ -58,8 +58,9 @@ class EntryProcessor(
                 EntryType.VOICE -> ai.transcribe(file)
                 else -> ai.extractText(file)
             }
-            // An empty answer is a valid one: a page with nothing written on it.
-            journal.setProcessing(entry.id, ProcessingState.DONE, text)
+            // An empty answer is a valid one: a page with nothing written on it. If the
+            // user typed the words meanwhile, this changes nothing and theirs stand.
+            journal.finishTypingOut(entry.id, text)
             ProcessingState.DONE
         } catch (e: CancellationException) {
             throw e

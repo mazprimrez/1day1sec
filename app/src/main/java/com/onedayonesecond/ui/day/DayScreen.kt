@@ -683,7 +683,9 @@ class VoicePlayback {
         try {
             player = MediaPlayer().apply {
                 setDataSource(file.absolutePath)
-                setOnCompletionListener { stop() }
+                // This class's stop(), which also clears the row's "playing" state; a
+                // bare stop() here would be the media player's own.
+                setOnCompletionListener { this@VoicePlayback.stop() }
                 prepare()
                 start()
             }

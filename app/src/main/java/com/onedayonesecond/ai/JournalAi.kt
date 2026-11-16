@@ -47,21 +47,23 @@ class BackendJournalAi(baseUrl: String, private val key: String) : JournalAi {
     override val isConfigured: Boolean get() = base.isNotEmpty()
 
     override suspend fun transcribe(audio: File): String =
-        post("/v1/transcribe", audio.readBytes(), "audio/mp4").text()
+        post("/v1/transcribe", "audio/mp4") { audio.readBytes() }.text()
 
     override suspend fun extractText(image: File): String {
         val type = if (image.extension.equals("png", ignoreCase = true)) "image/png" else "image/jpeg"
-        return post("/v1/extract-text", image.readBytes(), type).text()
+        return post("/v1/extract-text", type) { image.readBytes() }.text()
     }
 
     override suspend fun writeRecap(request: JSONObject): JSONObject =
-        post("/v1/recap", request.toString().toByteArray(Charsets.UTF_8), "application/json; charset=UTF-8")
+        post("/v1/recap", "application/json; charset=UTF-8") { request.toString().toByteArray(Charsets.UTF_8) }
 
     private fun JSONObject.text(): String = optString("text").trim()
 
-    private suspend fun post(path: String, body: ByteArray, contentType: String): JSONObject =
+    /** [readBody] runs off the main thread with the rest of the call: it may read a whole file. */
+    private suspend fun post(path: String, contentType: String, readBody: () -> ByteArray): JSONObject =
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             if (!isConfigured) throw AiNotConfiguredException()
+            val body = readBody()
             val connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT_MS

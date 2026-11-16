@@ -4,7 +4,6 @@ import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.Query
-import androidx.room.Update
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 import java.time.LocalDate
@@ -58,8 +57,27 @@ interface JournalDao {
     @Insert
     suspend fun insertEntry(entry: Entry): Long
 
-    @Update
-    suspend fun updateEntry(entry: Entry)
+    // Entries are changed one column at a time, never by writing a whole row back.
+    // An entry can be edited by the user, typed out in the background and given its
+    // place all at once; whole-row writes would let the last one undo the others.
+
+    @Query("UPDATE entries SET placeName = :place WHERE id = :id")
+    suspend fun setEntryPlace(id: Long, place: String?)
+
+    /** The user's own words. They settle the matter: nothing is typed out over them. */
+    @Query("UPDATE entries SET text = :text, processing = 'DONE' WHERE id = :id")
+    suspend fun setEntryTextByHand(id: Long, text: String)
+
+    @Query("UPDATE entries SET text = :text WHERE id = :id")
+    suspend fun clearEntryText(id: Long, text: String)
+
+    /** Typed-out words. Ignored if the entry is already done, because then the user typed first. */
+    @Query("UPDATE entries SET text = :text, processing = 'DONE' WHERE id = :id AND processing != 'DONE'")
+    suspend fun finishTypingOut(id: Long, text: String): Int
+
+    /** Never moves a finished entry back to waiting or failed. */
+    @Query("UPDATE entries SET processing = :state WHERE id = :id AND processing != 'DONE'")
+    suspend fun setEntryProcessing(id: Long, state: ProcessingState)
 
     @Delete
     suspend fun deleteEntry(entry: Entry)

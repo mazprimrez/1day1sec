@@ -3,10 +3,12 @@ package com.onedayonesecond.ui.nav
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -71,7 +73,9 @@ fun AppNavHost() {
         contentColor = Palette.Ink,
         bottomBar = { if (route in Routes.TABS) TabBar(route, navController) },
         snackbarHost = {
-            message?.let { shown ->
+            // Not over the camera, where it would sit on the record button. A message
+            // still waiting is shown again, with its Undo, on the next screen.
+            message?.takeIf { route != Routes.CAMERA_PATTERN }?.let { shown ->
                 MessageBar(
                     message = shown,
                     onAction = { action ->
@@ -87,22 +91,33 @@ fun AppNavHost() {
             }
         },
     ) { padding ->
-        // The camera draws under the system bars; every other screen sits between them.
-        val inner = if (route == Routes.CAMERA_PATTERN) PaddingValues(0.dp) else padding
-        NavHost(
-            navController = navController,
-            startDestination = Routes.DAYS,
-            // Consumed as well as applied, so a screen that pads for the keyboard does
-            // not add the system bar's height a second time.
-            modifier = Modifier.padding(inner).consumeWindowInsets(inner),
-        ) {
-            destinations(navController)
+        NavHost(navController = navController, startDestination = Routes.DAYS) {
+            destinations(navController, padding)
         }
     }
 }
 
+/**
+ * A screen that sits between the system bars (and above the tab bar, when it shows).
+ * The padding is applied by each screen rather than by the host, so that while one
+ * screen fades into another, each keeps its own: the camera, which draws under the
+ * bars, does not drag the screen it is replacing up with it. It is consumed as well
+ * as applied, so a screen that pads for the keyboard does not add the system bar's
+ * height a second time.
+ */
+private fun androidx.navigation.NavGraphBuilder.screen(
+    route: String,
+    padding: PaddingValues,
+    arguments: List<androidx.navigation.NamedNavArgument> = emptyList(),
+    content: @Composable (androidx.navigation.NavBackStackEntry) -> Unit,
+) {
+    composable(route, arguments = arguments) { entry ->
+        Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) { content(entry) }
+    }
+}
+
 @UnstableApi
-private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostController) {
+private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostController, padding: PaddingValues) {
     val dateArg = listOf(navArgument(Routes.ARG_DATE) { type = NavType.LongType })
     fun androidx.navigation.NavBackStackEntry.date(): LocalDate =
         LocalDate.ofEpochDay(arguments!!.getLong(Routes.ARG_DATE))
@@ -113,7 +128,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         nav.navigate(Routes.day(date))
     }
 
-    composable(Routes.DAYS) {
+    screen(Routes.DAYS, padding) {
         HomeScreen(
             onOpenDay = { nav.navigate(Routes.day(it)) },
             onRecord = { nav.navigate(Routes.camera(it)) },
@@ -124,20 +139,20 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    composable(Routes.RECAPS) {
+    screen(Routes.RECAPS, padding) {
         RecapsScreen(
             onOpenRecap = { nav.navigate(Routes.recap(it)) },
             onOpenPixels = { nav.navigate(Routes.pixels(it)) },
         )
     }
 
-    composable(Routes.REEL) { ReelScreen() }
+    screen(Routes.REEL, padding) { ReelScreen() }
 
-    composable(Routes.DELETED) {
+    screen(Routes.DELETED, padding) {
         RecentlyDeletedScreen(onBack = { nav.popBackStack() })
     }
 
-    composable(Routes.DAY_PATTERN, arguments = dateArg) {
+    screen(Routes.DAY_PATTERN, padding, dateArg) {
         DayScreen(
             onBack = { nav.popBackStack() },
             onRecord = { nav.navigate(Routes.camera(it)) },
@@ -149,7 +164,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    composable(Routes.GALLERY_DAY_PATTERN, arguments = dateArg) { entry ->
+    screen(Routes.GALLERY_DAY_PATTERN, padding, dateArg) { entry ->
         val date = entry.date()
         GalleryDayScreen(
             // Back from the trim screen lands here again, so a different video
@@ -160,6 +175,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
+    // The camera draws under the system bars and pads its own controls.
     composable(Routes.CAMERA_PATTERN, arguments = dateArg) { entry ->
         val date = entry.date()
         CameraScreen(
@@ -169,9 +185,10 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    composable(
-        route = Routes.TRIM_PATTERN,
-        arguments = dateArg + navArgument(Routes.ARG_PATH) { type = NavType.StringType },
+    screen(
+        Routes.TRIM_PATTERN,
+        padding,
+        dateArg + navArgument(Routes.ARG_PATH) { type = NavType.StringType },
     ) { entry ->
         TrimScreen(
             // Saving lands on the day's page rather than back at the camera, so the
@@ -181,9 +198,10 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    composable(
-        route = Routes.WRITE_PATTERN,
-        arguments = dateArg + navArgument(Routes.ARG_ENTRY) {
+    screen(
+        Routes.WRITE_PATTERN,
+        padding,
+        dateArg + navArgument(Routes.ARG_ENTRY) {
             type = NavType.LongType
             defaultValue = Routes.NO_ENTRY
         },
@@ -196,17 +214,18 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    composable(Routes.VOICE_PATTERN, arguments = dateArg) { entry ->
+    screen(Routes.VOICE_PATTERN, padding, dateArg) { entry ->
         VoiceScreen(date = entry.date(), onDone = { showDay(entry.date()) }, onBack = { nav.popBackStack() })
     }
 
-    composable(Routes.PEN_PATTERN, arguments = dateArg) { entry ->
+    screen(Routes.PEN_PATTERN, padding, dateArg) { entry ->
         PenScreen(date = entry.date(), onDone = { showDay(entry.date()) }, onBack = { nav.popBackStack() })
     }
 
-    composable(
-        route = Routes.RECAP_PATTERN,
-        arguments = listOf(navArgument(Routes.ARG_KEY) { type = NavType.StringType }),
+    screen(
+        Routes.RECAP_PATTERN,
+        padding,
+        listOf(navArgument(Routes.ARG_KEY) { type = NavType.StringType }),
     ) {
         RecapScreen(
             onBack = { nav.popBackStack() },
@@ -222,9 +241,10 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    composable(
-        route = Routes.PIXELS_PATTERN,
-        arguments = listOf(navArgument(Routes.ARG_YEAR) { type = NavType.IntType }),
+    screen(
+        Routes.PIXELS_PATTERN,
+        padding,
+        listOf(navArgument(Routes.ARG_YEAR) { type = NavType.IntType }),
     ) {
         PixelsScreen(onBack = { nav.popBackStack() })
     }

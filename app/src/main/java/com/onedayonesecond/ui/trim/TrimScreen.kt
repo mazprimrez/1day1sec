@@ -33,6 +33,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -220,6 +221,9 @@ private fun Filmstrip(state: TrimUiState, enabled: Boolean, onCommit: (Long) -> 
     // Where the window is while it is being dragged; null means "where the state says".
     var dragging by remember { mutableStateOf<Float?>(null) }
     val startMs = dragging ?: state.startMs.toFloat()
+    // The gesture handlers below outlive a recomposition; this is how they see the
+    // position the window was last left at rather than the one from when they started.
+    val committed by rememberUpdatedState(state.startMs.toFloat())
     val frames = remember(state.frames) { state.frames.map { it.asImageBitmap() } }
 
     BoxWithConstraints(
@@ -254,7 +258,7 @@ private fun Filmstrip(state: TrimUiState, enabled: Boolean, onCommit: (Long) -> 
                         }
                         .pointerInput(duration, maxStart) {
                             detectHorizontalDragGestures(
-                                onDragStart = { dragging = state.startMs.toFloat() },
+                                onDragStart = { dragging = committed },
                                 onDragEnd = {
                                     dragging?.let { onCommit(it.toLong()) }
                                     dragging = null
@@ -262,7 +266,7 @@ private fun Filmstrip(state: TrimUiState, enabled: Boolean, onCommit: (Long) -> 
                                 onDragCancel = { dragging = null },
                             ) { change, dx ->
                                 change.consume()
-                                val moved = (dragging ?: state.startMs.toFloat()) + dx / size.width * duration
+                                val moved = (dragging ?: committed) + dx / size.width * duration
                                 dragging = moved.coerceIn(0f, maxStart.toFloat())
                             }
                         }

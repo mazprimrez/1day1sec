@@ -69,7 +69,6 @@ object LineIcons {
         moveTo(6f, 6f); lineTo(18f, 18f)
         moveTo(18f, 6f); lineTo(6f, 18f)
     }
-    val Check = icon("Check") { moveTo(5f, 12.5f); lineTo(10f, 17.5f); lineTo(19f, 7f) }
 
     /** Days tab: a calendar page. */
     val Days = icon("Days") {
@@ -126,12 +125,6 @@ object LineIcons {
         moveTo(8.5f, 6f); lineTo(8.5f, 18f)
         moveTo(15.5f, 6f); lineTo(15.5f, 18f)
     }
-    val Stop = icon("Stop") { roundRect(6.5f, 6.5f, 17.5f, 17.5f, 2f) }
-    val Download = icon("Download") {
-        moveTo(12f, 4f); lineTo(12f, 15f)
-        moveTo(7f, 10.5f); lineTo(12f, 15.5f); lineTo(17f, 10.5f)
-        moveTo(5f, 19.5f); lineTo(19f, 19.5f)
-    }
     val ArrowUp = icon("ArrowUp") {
         moveTo(12f, 19f); lineTo(12f, 5f)
         moveTo(6.5f, 10.5f); lineTo(12f, 5f); lineTo(17.5f, 10.5f)
@@ -145,10 +138,6 @@ object LineIcons {
     val ArrowSame = icon("ArrowSame") {
         moveTo(5f, 12f); lineTo(19f, 12f)
         moveTo(14f, 7f); lineTo(19f, 12f); lineTo(14f, 17f)
-    }
-    val Undo = icon("Undo") {
-        moveTo(8.5f, 5f); lineTo(4.5f, 9f); lineTo(8.5f, 13f)
-        moveTo(4.5f, 9f); lineTo(14f, 9f); arcTo(5f, 5f, 0f, false, true, 14f, 19f); lineTo(8f, 19f)
     }
     val Place = icon("Place") {
         moveTo(12f, 21f)

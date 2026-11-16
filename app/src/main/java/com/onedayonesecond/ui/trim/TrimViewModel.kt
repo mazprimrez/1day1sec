@@ -21,6 +21,7 @@ import com.onedayonesecond.ui.nav.Routes
 import com.onedayonesecond.ui.theme.MessageAction
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -94,9 +95,14 @@ class TrimViewModel(
                     output = output,
                     startMs = current.startMs,
                 )
-                val saved = container.repository.saveClipKeepingOld(current.date, output, duration, current.caption)
-                current.sourceFile.delete()
-                announce(saved)
+                // Leaving the screen can cancel the trimming above, but not this: stopping
+                // between "old second to the trash" and "new second recorded" would leave
+                // the day looking empty.
+                withContext(NonCancellable) {
+                    val saved = container.repository.saveClipKeepingOld(current.date, output, duration, current.caption)
+                    current.sourceFile.delete()
+                    announce(saved)
+                }
                 // After the save and off the critical path: a slow location fix must not
                 // hold up the day page.
                 container.appScope.launch {

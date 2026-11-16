@@ -441,17 +441,35 @@ class DriveBackup(
 
     /** Brings one day's mood, place and entries back, downloading each entry's media. */
     private suspend fun restoreDay(api: DriveApi, day: DayBackup, folder: List<DriveApi.RemoteFile>) {
-        for (entry in day.entries) {
-            var path: String? = null
-            if (entry.media != null) {
+        // Everything is downloaded before anything is recorded. A day counts as "on the
+        // phone" as soon as it has one entry, so a connection that dropped half-way
+        // through recording them would leave the rest of the day unrestorable.
+        val downloaded = mutableListOf<Pair<EntryBackup, File?>>()
+        try {
+            for (entry in day.entries) {
+                if (entry.media == null) {
+                    downloaded += entry to null
+                    continue
+                }
                 // An entry whose media is not in Drive cannot be brought back; its words alone would mislead.
                 val remote = folder.firstOrNull { it.name == entry.media } ?: continue
-                val target = journal.storage.newJournalFile(
-                    day.date,
-                    entry.createdAt,
-                    File(entry.media).extension.ifEmpty { "bin" },
-                )
-                target.writeBytes(api.download(remote.id))
+                val scratch = journal.storage.newScratchFile(File(entry.media).extension.ifEmpty { "bin" })
+                scratch.writeBytes(api.download(remote.id))
+                downloaded += entry to scratch
+            }
+        } catch (e: Exception) {
+            downloaded.forEach { it.second?.delete() }
+            throw e
+        }
+
+        for ((entry, scratch) in downloaded) {
+            var path: String? = null
+            if (scratch != null) {
+                val target = journal.storage.newJournalFile(day.date, entry.createdAt, scratch.extension)
+                if (!scratch.renameTo(target)) {
+                    scratch.copyTo(target, overwrite = true)
+                    scratch.delete()
+                }
                 path = target.absolutePath
             }
             val restored = Entry(

@@ -20,9 +20,9 @@ import java.io.IOException
 import java.time.LocalDate
 
 /**
- * Adding things to a day. Each one saves first, then looks up the place, then (for
- * voice notes and pages) starts having the words typed out, so an entry is safe on
- * the phone before anything that needs the network is tried.
+ * Adding things to a day. Each one is saved first. Only then is the place looked up
+ * (it can take several seconds) and, for voice notes and pages, the typing out
+ * started, so an entry is safe on the phone before anything slow or networked is tried.
  */
 class JournalActions(
     context: Context,
@@ -41,10 +41,20 @@ class JournalActions(
     suspend fun placeFor(date: LocalDate): String? =
         if (date == LocalDate.now()) places.current() else null
 
-    suspend fun write(date: LocalDate, text: String): Entry = journal.addWritten(date, text, placeFor(date))
+    suspend fun write(date: LocalDate, text: String): Entry =
+        journal.addWritten(date, text, place = null).also { placeLater(date, listOf(it)) }
 
     suspend fun addVoice(date: LocalDate, recording: File): Entry =
-        journal.addMedia(date, EntryType.VOICE, recording, "m4a", placeFor(date)).also(::typeOut)
+        journal.addMedia(date, EntryType.VOICE, recording, "m4a", place = null).also {
+            placeLater(date, listOf(it))
+            typeOut(it)
+        }
+
+    /** Fills in where [entries] were made, in the background, after they are safely saved. */
+    private fun placeLater(date: LocalDate, entries: List<Entry>) {
+        if (entries.isEmpty()) return
+        appScope.launch { journal.attachPlace(entries, placeFor(date)) }
+    }
 
     /**
      * Copies photos into the journal. Photos chosen together share one moment, so the
@@ -53,7 +63,6 @@ class JournalActions(
      * @return the entries made. Photos that cannot be read are skipped.
      */
     suspend fun addPhotos(date: LocalDate, sources: List<Uri>, notebook: Boolean): List<Entry> {
-        val place = placeFor(date)
         val createdAt = System.currentTimeMillis()
         val type = if (notebook) EntryType.NOTEBOOK_PHOTO else EntryType.PHOTO
         return sources.mapNotNull { uri ->
@@ -62,8 +71,8 @@ class JournalActions(
             } catch (e: IOException) {
                 null
             } ?: return@mapNotNull null
-            journal.addMedia(date, type, scratch, "jpg", place, createdAt).also { if (notebook) typeOut(it) }
-        }
+            journal.addMedia(date, type, scratch, "jpg", place = null, createdAt).also { if (notebook) typeOut(it) }
+        }.also { placeLater(date, it) }
     }
 
     /** A page drawn with the pen. Its handwriting is typed out like a notebook photo's. */
@@ -73,7 +82,10 @@ class JournalActions(
                 file.outputStream().use { page.compress(Bitmap.CompressFormat.PNG, 100, it) }
             }
         }
-        return journal.addMedia(date, EntryType.PEN, scratch, "png", placeFor(date)).also(::typeOut)
+        return journal.addMedia(date, EntryType.PEN, scratch, "png", place = null).also {
+            placeLater(date, listOf(it))
+            typeOut(it)
+        }
     }
 
     /** Starts typing out now, and leaves a job behind that retries when the phone is online. */

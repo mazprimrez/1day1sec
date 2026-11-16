@@ -121,10 +121,18 @@ class ClipRepository(
         val occupant = dao.getByDate(target)
         if (!replaceExisting && occupant != null) throw ClipAlreadyExistsException(target)
         // Out of the way first, into the trash, so the copy below cannot overwrite it.
-        occupant?.takeIf { it.file.exists() }?.let { moveToTrash(it) }
+        val replaced = occupant?.takeIf { it.file.exists() }?.let { moveToTrash(it) }
 
         val destination = storage.clipFile(target)
-        source.copyTo(destination, overwrite = true)
+        try {
+            source.copyTo(destination, overwrite = true)
+        } catch (e: IOException) {
+            // The move did not happen (a full disk, say), so nothing should have changed:
+            // the second that was pushed aside goes back on its day.
+            destination.delete()
+            replaced?.let { runCatching { restoreDeleted(it.id) } }
+            throw e
+        }
 
         val moved = ClipEntity(
             date = target,

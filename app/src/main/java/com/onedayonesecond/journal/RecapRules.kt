@@ -1,10 +1,8 @@
 package com.onedayonesecond.journal
 
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
-import java.time.Month
 
 /**
  * When recaps are written and whether there is enough to write one from. Pure, so it
@@ -49,8 +47,4 @@ object RecapRules {
 
     /** When the next recap of the period containing [today] arrives, for "Letter arrives on…". */
     fun arrives(period: RecapPeriod): LocalDate = dueAt(period).toLocalDate()
-
-    /** True on a Sunday or on 31 December: the nights a recap is written the same evening. */
-    fun isRecapNight(date: LocalDate): Boolean =
-        date.dayOfWeek == DayOfWeek.SUNDAY || (date.month == Month.DECEMBER && date.dayOfMonth == 31)
 }

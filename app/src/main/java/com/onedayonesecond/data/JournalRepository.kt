@@ -70,9 +70,26 @@ class JournalRepository(
         return entry.copy(id = dao.insertEntry(entry))
     }
 
-    /** Changes an entry's words. Also how a typed-out voice note or page is corrected by hand. */
+    /**
+     * Changes an entry's words. Also how a typed-out voice note or page is corrected by
+     * hand, or typed by hand when it could not be typed out. Words the user gives mark
+     * the entry as done, so nothing typed out later can replace them.
+     */
     suspend fun setText(entry: Entry, text: String) {
-        dao.updateEntry(entry.copy(text = text.trim()))
+        val words = text.trim()
+        if (words.isNotEmpty() || !entry.needsText) {
+            dao.setEntryTextByHand(entry.id, words)
+        } else {
+            // Emptied out: the words are gone, but it may still be typed out.
+            dao.clearEntryText(entry.id, words)
+        }
+    }
+
+    /** Sets where an entry was made, once that is known, and gives the day a place if it has none. */
+    suspend fun attachPlace(entries: List<Entry>, place: String?) {
+        val tidy = place.tidyPlace() ?: return
+        entries.forEach { dao.setEntryPlace(it.id, tidy) }
+        entries.firstOrNull()?.let { notePlace(it.date, tidy) }
     }
 
     /**
@@ -111,10 +128,16 @@ class JournalRepository(
     /** Used by restore: the entry is recorded as it is, media already in place. */
     suspend fun putEntry(entry: Entry): Entry = entry.copy(id = dao.insertEntry(entry.copy(id = 0)))
 
-    suspend fun setProcessing(id: Long, state: ProcessingState, text: String? = null) {
-        val entry = dao.entry(id) ?: return
-        dao.updateEntry(entry.copy(processing = state, text = text?.trim() ?: entry.text))
-    }
+    /** Marks an entry as waiting or failed. An entry that is already done stays done. */
+    suspend fun setProcessing(id: Long, state: ProcessingState) = dao.setEntryProcessing(id, state)
+
+    /**
+     * Stores the words typed out for an entry and marks it done.
+     *
+     * @return false if the entry was already done, which means the user typed its words
+     * while it was being typed out. Theirs are kept.
+     */
+    suspend fun finishTypingOut(id: Long, text: String): Boolean = dao.finishTypingOut(id, text.trim()) > 0
 
     suspend fun deleteEntry(entry: Entry) = withContext(Dispatchers.IO) {
         dao.deleteEntry(entry)
