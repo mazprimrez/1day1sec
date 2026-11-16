@@ -21,6 +21,12 @@ class ClipStorage(private val filesDir: File, private val cacheDir: File) {
     private val clipsDir: File
         get() = File(filesDir, "clips").apply { mkdirs() }
 
+    private val trashDir: File
+        get() = File(filesDir, "trash").apply { mkdirs() }
+
+    private val journalDir: File
+        get() = File(filesDir, "journal").apply { mkdirs() }
+
     private val capturesDir: File
         get() = File(cacheDir, "captures").apply { mkdirs() }
 
@@ -29,6 +35,35 @@ class ClipStorage(private val filesDir: File, private val cacheDir: File) {
 
     /** Stable, permanent location for a given day's trimmed second. */
     fun clipFile(date: LocalDate): File = File(clipsDir, "$date.mp4")
+
+    /**
+     * Where a deleted or replaced second waits until it is restored or purged. The
+     * time is part of the name because the same day can be deleted more than once.
+     */
+    fun newTrashFile(date: LocalDate, now: Long = System.currentTimeMillis()): File {
+        var file = File(trashDir, "$date-$now.mp4")
+        var n = 1
+        while (file.exists()) file = File(trashDir, "$date-$now-${n++}.mp4")
+        return file
+    }
+
+    /** Every file in the trash folder, including any that lost their database row. */
+    fun trashFiles(): List<File> = trashDir.listFiles()?.toList().orEmpty()
+
+    /**
+     * Permanent home of an entry's audio, photo or pen page. Named by day and the
+     * moment it was made, which is also its name in the Drive backup.
+     */
+    fun newJournalFile(date: LocalDate, createdAt: Long, extension: String): File {
+        var file = File(journalDir, "$date-$createdAt.$extension")
+        var n = 1
+        while (file.exists()) file = File(journalDir, "$date-$createdAt-${n++}.$extension")
+        return file
+    }
+
+    /** Scratch file for a photo being taken or a voice note being recorded. */
+    fun newScratchFile(extension: String): File =
+        File(capturesDir, "scratch-${System.nanoTime()}.$extension")
 
     /** Scratch file for a fresh camera recording, before trimming. */
     fun newCaptureFile(): File = File(capturesDir, "capture-${System.currentTimeMillis()}.mp4")

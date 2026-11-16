@@ -60,7 +60,7 @@ class DriveAuth(context: Context) {
 }
 
 /** Play Services returns `Task`s; this avoids a dependency just to await one. */
-private suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { continuation ->
+internal suspend fun <T> Task<T>.await(): T = suspendCancellableCoroutine { continuation ->
     addOnSuccessListener { continuation.resume(it) }
     addOnFailureListener { continuation.resumeWithException(it) }
     addOnCanceledListener { continuation.cancel() }

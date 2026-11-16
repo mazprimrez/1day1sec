@@ -31,7 +31,7 @@ class ClipRepositoryMoveTest {
     fun setUp() {
         dao = FakeClipDao()
         storage = ClipStorage(temp.newFolder("files"), temp.newFolder("cache"))
-        repository = ClipRepository(dao, storage)
+        repository = ClipRepository(dao, storage, FakeDeletedClipDao())
     }
 
     /** Stores a clip the way the app does, with [content] standing in for the video. */

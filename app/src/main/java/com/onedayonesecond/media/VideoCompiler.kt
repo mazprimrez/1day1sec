@@ -18,8 +18,8 @@ import com.google.common.collect.ImmutableList
 import java.io.File
 import java.time.LocalDate
 
-/** A stored clip together with the day it belongs to and its caption (empty for none). */
-data class DatedClip(val date: LocalDate, val file: File, val caption: String = "")
+/** A stored clip together with the day it belongs to, its caption and the day's place (empty for none). */
+data class DatedClip(val date: LocalDate, val file: File, val caption: String = "", val place: String = "")
 
 /**
  * Stitches daily clips into a single reel, in the order given.
@@ -32,8 +32,9 @@ class VideoCompiler(private val context: Context) {
      * @param output destination file for the reel.
      * @param showDates burn each clip's date into the frame.
      * @param showCaptions burn each clip's caption, if it has one, above the date.
-     * @param dateStyle font and position of the date and caption text; ignored when both
-     * are switched off.
+     * @param showPlaces burn each clip's place, if its day has one, below the date.
+     * @param dateStyle font and position of the text; ignored when all three are
+     * switched off.
      * @param onProgress fraction complete, 0f..1f.
      */
     suspend fun compile(
@@ -41,6 +42,7 @@ class VideoCompiler(private val context: Context) {
         output: File,
         showDates: Boolean = true,
         showCaptions: Boolean = true,
+        showPlaces: Boolean = false,
         dateStyle: DateLabelStyle = DateLabelStyle(),
         onProgress: (Float) -> Unit = {},
     ) {
@@ -57,7 +59,7 @@ class VideoCompiler(private val context: Context) {
                         Presentation.LAYOUT_SCALE_TO_FIT_WITH_CROP,
                     ),
                 )
-                textOverlay(clip, showDates, showCaptions, dateStyle)?.let(::add)
+                textOverlay(clip, showDates, showCaptions, showPlaces, dateStyle)?.let(::add)
             }
 
             EditedMediaItem.Builder(MediaItem.fromUri(Uri.fromFile(clip.file)))
@@ -79,7 +81,7 @@ class VideoCompiler(private val context: Context) {
     }
 
     /**
-     * The caption and date, pinned to the chosen edge and side of the frame. Null when
+     * The caption, date and place, pinned to the chosen edge and side of the frame. Null when
      * there is nothing to show for this clip, so a clip without a caption on a reel
      * with dates switched off gets no overlay at all.
      *
@@ -92,11 +94,13 @@ class VideoCompiler(private val context: Context) {
         clip: DatedClip,
         showDates: Boolean,
         showCaptions: Boolean,
+        showPlaces: Boolean,
         style: DateLabelStyle,
     ): OverlayEffect? {
         val label = overlayLabelText(
             caption = if (showCaptions) clip.caption else null,
             dateText = if (showDates) clip.date.format(DATE_LABEL_FORMAT) else null,
+            place = if (showPlaces) clip.place else null,
             style = style,
         ) ?: return null
 

@@ -1,0 +1,52 @@
+{
+  "period": "month",
+  "key": "month-2026-10",
+  "start": "2026-10-01",
+  "end": "2026-10-31",
+  "name": "Eza",
+  "language": "en-ID",
+  "days": [
+    {
+      "date": "2026-10-03",
+      "weekday": "Saturday",
+      "mood": "GOOD",
+      "place": "Bandung",
+      "caption": "Bandung trip",
+      "entries": ["Ke Bandung sama anak-anak kantor lama. Dingin, hujan, tapi seru. We laughed until midnight."]
+    },
+    {
+      "date": "2026-10-08",
+      "weekday": "Thursday",
+      "mood": "ROUGH",
+      "place": null,
+      "caption": "",
+      "entries": ["Demam dari semalam. Izin kerja, tidur seharian. I hate being sick alone."]
+    },
+    {
+      "date": "2026-10-12",
+      "weekday": "Monday",
+      "mood": "NEUTRAL",
+      "place": "Kuningan, Jakarta Selatan",
+      "caption": "back to work",
+      "entries": ["Balik kerja. Inbox 200 email. Pelan-pelan aja, satu-satu."]
+    },
+    {
+      "date": "2026-10-19",
+      "weekday": "Monday",
+      "mood": "GOOD",
+      "place": "Kuningan, Jakarta Selatan",
+      "caption": "",
+      "entries": ["Presentasi ke klien lancar. Bos bilang good job, which honestly made my whole day."]
+    },
+    {
+      "date": "2026-10-25",
+      "weekday": "Sunday",
+      "mood": "GREAT",
+      "place": "Kemang, Jakarta Selatan",
+      "caption": "ulang tahun Ibu",
+      "entries": ["Ulang tahun Ibu yang ke-60. Semua kumpul di rumah, aku yang masak rendang. She cried a little when we sang."]
+    }
+  ],
+  "stats": {"daysKept": 22, "daysWritten": 5, "words": 96, "averageMood": 3.4},
+  "previousStats": {"daysKept": 18, "daysWritten": 7, "words": 140, "averageMood": 3.1}
+}

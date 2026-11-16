@@ -8,8 +8,10 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.AppContainer
 import com.onedayonesecond.OneDayApp
+import com.onedayonesecond.data.ClipEntity
 import com.onedayonesecond.media.DateLabelStyle
 import com.onedayonesecond.media.DatedClip
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +28,10 @@ enum class RangeOption(val label: String) {
     THIS_MONTH("This month"),
 }
 
+/**
+ * IDLE: nothing built. COMPILING: stitching. READY: built, but saving it to the
+ * gallery failed and can be tried again. EXPORTING: saving. EXPORTED: saved.
+ */
 enum class CompilePhase { IDLE, COMPILING, READY, EXPORTING, EXPORTED }
 
 data class CompileUiState(
@@ -37,8 +43,13 @@ data class CompileUiState(
     val exportedName: String? = null,
     val showDates: Boolean = true,
     val showCaptions: Boolean = true,
+    val showPlaces: Boolean = true,
     /** How many of the [clipCount] clips in the range have a caption. */
     val captionCount: Int = 0,
+    /** How many of the [clipCount] clips in the range are on a day that has a place. */
+    val placeCount: Int = 0,
+    /** The newest clip in the range, shown as the preview until a reel is made. */
+    val previewClip: ClipEntity? = null,
     val dateStyle: DateLabelStyle = DateLabelStyle(),
     val error: String? = null,
 )
@@ -99,6 +110,19 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
+    fun setShowPlaces(show: Boolean) {
+        _state.update {
+            it.copy(
+                showPlaces = show,
+                // A reel built with the old setting no longer matches the toggle.
+                phase = CompilePhase.IDLE,
+                reelFile = null,
+                exportedName = null,
+                progress = 0f,
+            )
+        }
+    }
+
     fun setDateStyle(style: DateLabelStyle) {
         if (style == _state.value.dateStyle) return
         _state.update {
@@ -114,19 +138,36 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.dateStyleStore.save(style) }
     }
 
-    private fun refreshCount() {
+    /** Also called when the tab is returned to, since seconds may have been added meanwhile. */
+    fun refreshCount() {
         viewModelScope.launch {
             val (start, end) = resolveRange(_state.value.range)
             val clips = container.repository.clipsBetween(start, end)
+            val places = placesBetween(start, end)
             _state.update {
-                it.copy(clipCount = clips.size, captionCount = clips.count { clip -> clip.caption.isNotEmpty() })
+                it.copy(
+                    clipCount = clips.size,
+                    captionCount = clips.count { clip -> clip.caption.isNotEmpty() },
+                    placeCount = clips.count { clip -> clip.date in places },
+                    previewClip = clips.lastOrNull(),
+                )
             }
         }
     }
 
-    fun compile() {
+    /** The place of each day in the range that has one. */
+    private suspend fun placesBetween(start: LocalDate, end: LocalDate): Map<LocalDate, String> =
+        container.journal.metaBetween(start, end)
+            .mapNotNull { meta -> meta.placeName?.let { meta.date to it } }
+            .toMap()
+
+    /**
+     * "Make my reel": stitches the range's seconds together and saves the result to
+     * Movies/1day1sec in one go. The finished reel stays here to be played.
+     */
+    fun makeReel() {
         if (job?.isActive == true) return
-        _state.update { it.copy(phase = CompilePhase.COMPILING, progress = 0f, error = null) }
+        _state.update { it.copy(phase = CompilePhase.COMPILING, progress = 0f, error = null, exportedName = null) }
 
         job = viewModelScope.launch {
             try {
@@ -134,17 +175,19 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
                 val clips = container.repository.clipsBetween(start, end)
                 if (clips.isEmpty()) {
                     _state.update {
-                        it.copy(phase = CompilePhase.IDLE, error = "No clips in this range yet")
+                        it.copy(phase = CompilePhase.IDLE, error = "There are no seconds in this range yet.")
                     }
                     return@launch
                 }
+                val places = placesBetween(start, end)
 
                 val output = container.storage.newReelFile()
                 container.compiler.compile(
-                    clips = clips.map { DatedClip(it.date, it.file, it.caption) },
+                    clips = clips.map { DatedClip(it.date, it.file, it.caption, places[it.date].orEmpty()) },
                     output = output,
                     showDates = _state.value.showDates,
                     showCaptions = _state.value.showCaptions,
+                    showPlaces = _state.value.showPlaces,
                     dateStyle = _state.value.dateStyle,
                     onProgress = { fraction ->
                         _state.update { it.copy(progress = fraction) }
@@ -153,14 +196,18 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update {
                     it.copy(phase = CompilePhase.READY, progress = 1f, reelFile = output)
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.update {
                     it.copy(
                         phase = CompilePhase.IDLE,
-                        error = e.message ?: "Could not build the reel",
+                        error = e.message ?: "The reel could not be made.",
                     )
                 }
+                return@launch
             }
+            export()
         }
     }
 
@@ -170,8 +217,10 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(phase = CompilePhase.IDLE, progress = 0f) }
     }
 
+    /** Saves the built reel to the gallery. Also the retry when that step alone failed. */
     fun export() {
         val reel = _state.value.reelFile ?: return
+        if (_state.value.phase == CompilePhase.EXPORTING) return
         _state.update { it.copy(phase = CompilePhase.EXPORTING, error = null) }
 
         viewModelScope.launch {
@@ -183,7 +232,7 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
                 _state.update {
                     it.copy(
                         phase = CompilePhase.READY,
-                        error = e.message ?: "Could not save to the gallery",
+                        error = "The reel was made but could not be saved to Movies. ${e.message.orEmpty()}".trim(),
                     )
                 }
             }

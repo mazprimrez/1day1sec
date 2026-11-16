@@ -1,0 +1,54 @@
+{
+  "period": "week",
+  "key": "week-2026-11-09",
+  "start": "2026-11-09",
+  "end": "2026-11-15",
+  "name": "Eza",
+  "language": "en-ID",
+  "days": [
+    {
+      "date": "2026-11-09",
+      "weekday": "Monday",
+      "mood": "BAD",
+      "place": "Kuningan, Jakarta Selatan",
+      "caption": "deadline",
+      "entries": [
+        "Hari ini capek banget. Meeting dari pagi sampai sore, terus deadline-nya dimajuin ke Rabu. I didn't even have lunch properly."
+      ]
+    },
+    {
+      "date": "2026-11-11",
+      "weekday": "Wednesday",
+      "mood": "NEUTRAL",
+      "place": "Kuningan, Jakarta Selatan",
+      "caption": "",
+      "entries": [
+        "Deck-nya akhirnya ke-submit jam 9 malam. Lega sih, tapi rasanya kosong aja.",
+        "Pulang naik MRT, dengerin podcast. Honestly I just want to sleep."
+      ]
+    },
+    {
+      "date": "2026-11-13",
+      "weekday": "Friday",
+      "mood": "GOOD",
+      "place": "Kemang, Jakarta Selatan",
+      "caption": "makan malam sama Ibu",
+      "entries": [
+        "Makan malam sama Ibu di Kemang. Dia cerita soal kebun di rumah, and for the first time this week I wasn't thinking about work."
+      ]
+    },
+    {
+      "date": "2026-11-14",
+      "weekday": "Saturday",
+      "mood": "GREAT",
+      "place": "Kemang, Jakarta Selatan",
+      "caption": "coffee before the run",
+      "entries": [
+        "Lari pagi 5K di GBK, terus ngopi. It was the first quiet morning in weeks.",
+        "Sore beresin kamar sambil dengerin lagu lama."
+      ]
+    }
+  ],
+  "stats": {"daysKept": 6, "daysWritten": 4, "words": 118, "averageMood": 3.5},
+  "previousStats": {"daysKept": 4, "daysWritten": 3, "words": 72, "averageMood": 3.0}
+}

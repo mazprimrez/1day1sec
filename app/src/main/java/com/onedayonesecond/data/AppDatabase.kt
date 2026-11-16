@@ -8,11 +8,19 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [ClipEntity::class], version = 2, exportSchema = true)
+@Database(
+    entities = [ClipEntity::class, DayMeta::class, Entry::class, Recap::class, DeletedClip::class],
+    version = 3,
+    exportSchema = true,
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun clipDao(): ClipDao
+
+    abstract fun journalDao(): JournalDao
+
+    abstract fun deletedClipDao(): DeletedClipDao
 
     companion object {
         /**
@@ -26,11 +34,43 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 3 turns the app into a journal: a mood and place per day, entries,
+         * recaps, and a trash for deleted seconds. Only new tables; the clips table is
+         * not touched, so every existing second stays exactly as it is. The SQL has to
+         * match what Room generates for the entities, column for column (see
+         * app/schemas/.../3.json), or Room refuses to open the database.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `day_meta` (`date` INTEGER NOT NULL, `mood` TEXT, " +
+                        "`placeName` TEXT, PRIMARY KEY(`date`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `entries` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`date` INTEGER NOT NULL, `createdAt` INTEGER NOT NULL, `type` TEXT NOT NULL, " +
+                        "`text` TEXT, `mediaPath` TEXT, `placeName` TEXT, `processing` TEXT NOT NULL)",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_entries_date` ON `entries` (`date`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `recaps` (`key` TEXT NOT NULL, `title` TEXT NOT NULL, " +
+                        "`quote` TEXT NOT NULL, `quoteDate` INTEGER NOT NULL, `json` TEXT NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, PRIMARY KEY(`key`))",
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `deleted_clips` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`date` INTEGER NOT NULL, `filePath` TEXT NOT NULL, `durationMs` INTEGER NOT NULL, " +
+                        "`createdAt` INTEGER NOT NULL, `caption` TEXT NOT NULL, `deletedAt` INTEGER NOT NULL)",
+                )
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "onedayonesecond.db",
-            ).addMigrations(MIGRATION_1_2).build()
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
     }
 }

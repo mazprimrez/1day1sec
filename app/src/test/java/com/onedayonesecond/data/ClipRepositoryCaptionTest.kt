@@ -26,7 +26,7 @@ class ClipRepositoryCaptionTest {
     fun setUp() {
         dao = FakeClipDao()
         storage = ClipStorage(temp.newFolder("files"), temp.newFolder("cache"))
-        repository = ClipRepository(dao, storage)
+        repository = ClipRepository(dao, storage, FakeDeletedClipDao())
     }
 
     private fun store(date: LocalDate, caption: String = "", content: String = "video"): ClipEntity {

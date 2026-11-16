@@ -14,18 +14,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,14 +22,28 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.onedayonesecond.journal.RecapLabels
 import com.onedayonesecond.media.GalleryVideo
+import com.onedayonesecond.ui.common.PHOTO_ASPECT
+import com.onedayonesecond.ui.theme.BackBar
+import com.onedayonesecond.ui.theme.BodyText
+import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Palette
+import com.onedayonesecond.ui.theme.QuietButton
+import com.onedayonesecond.ui.theme.ScreenPadding
+import com.onedayonesecond.ui.theme.TileShape
+import com.onedayonesecond.ui.theme.TitleText
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -48,10 +51,9 @@ import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
 
-private val DayTitleFormat = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)
 private val TimeFormat = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** One day's videos from the phone's gallery, to choose that day's second from. */
 @Composable
 fun GalleryDayScreen(
     onPicked: (File) -> Unit,
@@ -68,43 +70,33 @@ fun GalleryDayScreen(
         onPicked(file)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(state.date.format(DayTitleFormat)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
-        },
-    ) { padding ->
+    Column(Modifier.fillMaxSize()) {
+        BackBar(onBack)
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
+            modifier = Modifier.weight(1f).padding(horizontal = ScreenPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Column {
+                TitleText("Videos from this day")
+                MetaText(RecapLabels.fullDate(state.date), Modifier.padding(top = 2.dp))
+            }
             when {
                 state.loading -> Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(Modifier.size(32.dp), color = Palette.Rose, strokeWidth = 2.dp)
                 }
 
                 state.videos.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
-                    Text("No videos from this day were found on your phone.")
+                    BodyText("No videos from this day were found on your phone.")
                 }
 
                 else -> {
-                    Text(
-                        text = "${state.videos.size} video${if (state.videos.size == 1) "" else "s"} " +
-                            "from this day. Tap one to choose your second from it.",
-                        style = MaterialTheme.typography.bodyMedium,
+                    MetaText(
+                        "${state.videos.size} video${if (state.videos.size == 1) "" else "s"}. " +
+                            "Tap one to choose your second from it.",
                     )
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(3),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.weight(1f),
                     ) {
@@ -121,14 +113,15 @@ fun GalleryDayScreen(
                 }
             }
 
-            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-
-            OutlinedButton(
-                onClick = onRecordInstead,
-                enabled = state.importingId == null,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            ) { Text("Record a new second instead") }
+            state.error?.let { BodyText(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
         }
+
+        QuietButton(
+            "Record a new second instead",
+            onRecordInstead,
+            Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 12.dp),
+            enabled = state.importingId == null,
+        )
     }
 }
 
@@ -143,51 +136,35 @@ private fun VideoTile(
     val image by produceState<ImageBitmap?>(initialValue = null, video.id) {
         value = thumbnail()?.asImageBitmap()
     }
+    val time = Instant.ofEpochMilli(video.takenAtMs).atZone(ZoneId.systemDefault()).toLocalTime().format(TimeFormat)
+    val length = video.durationMs.asClock()
 
-    Box(
-        modifier = Modifier
-            .aspectRatio(0.75f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(enabled = enabled, onClick = onClick),
+    Column(
+        Modifier
+            .clip(TileShape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = "Video from $time, $length long" },
     ) {
-        image?.let {
-            Image(
-                bitmap = it,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        Column(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.45f))
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-        ) {
-            Text(
-                text = Instant.ofEpochMilli(video.takenAtMs)
-                    .atZone(ZoneId.systemDefault()).toLocalTime().format(TimeFormat),
-                color = Color.White,
-                style = MaterialTheme.typography.labelSmall,
-            )
-            Text(
-                text = video.durationMs.asClock(),
-                color = Color.White.copy(alpha = 0.85f),
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
-
-        if (importing) {
-            Box(
-                Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                CircularProgressIndicator(Modifier.size(32.dp), color = Color.White)
+        Box(Modifier.fillMaxWidth().aspectRatio(PHOTO_ASPECT).clip(TileShape).background(Palette.Blush)) {
+            image?.let {
+                Image(
+                    bitmap = it,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (importing) {
+                Box(
+                    Modifier.fillMaxSize().background(Palette.Paper.copy(alpha = 0.75f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(Modifier.size(28.dp), color = Palette.Rose, strokeWidth = 2.dp)
+                }
             }
         }
+        // Under the picture rather than over it: no dark band on the footage.
+        MetaText("$time, $length", Modifier.padding(top = 4.dp), maxLines = 1)
     }
 }
 
