@@ -15,9 +15,11 @@ room = "2.6.1"
 work = "2.10.0"
 datastore = "1.1.1"
 playServicesAuth = "21.6.0"
+playServicesLocation = "21.3.0"
 
 guava = "33.3.1-android"
 junit = "4.13.2"
+orgJson = "20240303"
 androidxJunit = "1.2.1"
 
 [libraries]
@@ -33,7 +35,6 @@ androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graph
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
 androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-navigation-compose = { group = "androidx.navigation", name = "navigation-compose", version.ref = "navigationCompose" }
 
 # CameraX: camera2 is the backing implementation, lifecycle binds use cases to a
@@ -63,11 +64,18 @@ androidx-datastore-preferences = { group = "androidx.datastore", name = "datasto
 # pulling in the multi-megabyte google-api-services-drive client.
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 
+# Where an entry was written: one fused-location fix per entry, turned into a short
+# place name on the phone. Only asked for when the user first adds something.
+play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+
 # Media3's Effects API takes Guava ImmutableList directly, so it is declared
 # explicitly rather than relied on as a transitive of media3-common.
 guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+# Android ships org.json, but the unit tests run on a plain JVM where it is only a
+# stub that throws. This is the same API, for tests of the JSON the app reads and writes.
+org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxJunit" }
 
 [plugins]

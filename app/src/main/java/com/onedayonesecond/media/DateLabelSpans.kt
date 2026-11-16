@@ -19,7 +19,8 @@ fun DateFont.typeface(): Typeface =
 
 /**
  * The styled text handed to Transformer's text overlay: the clip's caption, wrapped
- * over a few lines, with the date on the line below it. Either part can be left out.
+ * over a few lines, with the date on the line below it and the day's place under
+ * that. Any part can be left out.
  * Returns null when there is nothing to draw.
  *
  * There is deliberately no background box: the text is white with a soft shadow,
@@ -31,14 +32,17 @@ fun DateFont.typeface(): Typeface =
  *
  * @param caption the clip's caption, or null / blank for none.
  * @param dateText the formatted date, or null to leave the date out.
+ * @param place the day's place, or null / blank for none. It is kept to one line.
  */
 internal fun overlayLabelText(
     caption: String?,
     dateText: String?,
     style: DateLabelStyle,
+    place: String? = null,
 ): SpannableString? {
     val captionText = caption?.let(Captions::normalize).orEmpty()
-    if (captionText.isEmpty() && dateText == null) return null
+    val placeText = place?.let(Captions::normalize).orEmpty()
+    if (captionText.isEmpty() && dateText == null && placeText.isEmpty()) return null
 
     // The overlay does no wrapping of its own: text wider than the frame would simply
     // be cut off. So the caption is broken into lines here, measured in the real font.
@@ -54,6 +58,9 @@ internal fun overlayLabelText(
     val lines = buildList {
         captionLines.forEach { add("$PAD$it$PAD" to CAPTION_TEXT_SIZE_PX) }
         if (dateText != null) add("$PAD$dateText$PAD" to DATE_TEXT_SIZE_PX)
+        // One line only: a place is a label under the date, not a second caption.
+        Captions.wrap(placeText, maxWidth, maxLines = 1) { measuring.measureText(it) }
+            .forEach { add("$PAD$it$PAD" to CAPTION_TEXT_SIZE_PX) }
     }
 
     val label = SpannableString(lines.joinToString("\n") { it.first })

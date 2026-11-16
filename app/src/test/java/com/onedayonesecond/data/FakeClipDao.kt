@@ -32,3 +32,24 @@ internal class FakeClipDao : ClipDao {
         rows.value[date]?.let { rows.value = rows.value + (date to it.copy(caption = caption)) }
     }
 }
+
+/** The same for the trash table. */
+internal class FakeDeletedClipDao : DeletedClipDao {
+    val rows = MutableStateFlow<Map<Long, DeletedClip>>(emptyMap())
+    private var nextId = 1L
+
+    override fun observeAll(): Flow<List<DeletedClip>> =
+        rows.map { it.values.sortedByDescending(DeletedClip::deletedAt) }
+
+    override suspend fun getAll() = rows.value.values.toList()
+    override suspend fun get(id: Long) = rows.value[id]
+    override suspend fun insert(row: DeletedClip): Long {
+        val id = nextId++
+        rows.value = rows.value + (id to row.copy(id = id))
+        return id
+    }
+
+    override suspend fun delete(id: Long) {
+        rows.value = rows.value - id
+    }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The one folder the phone's camera app is allowed to write into: scratch space
+     for a photo being taken for the journal. -->
+<paths>
+    <cache-path name="captures" path="captures/" />
+</paths>

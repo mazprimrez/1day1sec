@@ -33,6 +33,8 @@ data class BackupUiState(
     val phase: BackupPhase = BackupPhase.IDLE,
     val action: BackupAction? = null,
     val clipCount: Int = 0,
+    /** False when the phone has no second, journal day or recap to back up. */
+    val hasAnything: Boolean = false,
     val done: Int = 0,
     val total: Int = 0,
     val notice: String? = null,
@@ -122,15 +124,20 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
             BackupAction.RESTORE -> describe(container.driveBackup.restore(accessToken, onProgress))
         }
 
+        // Voice notes and pages restored without their words yet get typed out.
+        if (action == BackupAction.RESTORE) container.journalActions.resumeTypingOut()
+
         pending = null
         _state.update { it.copy(phase = BackupPhase.IDLE, notice = notice) }
         refreshCount()
     }
 
-    private fun refreshCount() {
+    /** Also called when the tab is returned to, since things may have been added meanwhile. */
+    fun refreshCount() {
         viewModelScope.launch {
             val count = container.driveBackup.clipCount()
-            _state.update { it.copy(clipCount = count) }
+            val any = container.driveBackup.hasAnything()
+            _state.update { it.copy(clipCount = count, hasAnything = any) }
         }
     }
 
@@ -146,13 +153,26 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun describe(summary: DriveBackup.Summary): String {
-        if (summary.total == 0 && summary.removedFromDrive == 0) {
-            return "Nothing to back up yet — record a second first."
+        if (summary.nothingToDo) {
+            return "Nothing to back up yet. Record a second or write something first."
         }
         return buildString {
-            append("Done. ${summary.uploaded} new")
+            append("Done. Seconds: ${summary.uploaded} new")
             if (summary.replaced > 0) append(", ${summary.replaced} updated")
             append(", ${summary.alreadyBackedUp} already in Drive.")
+            if (summary.journalDays > 0) {
+                append(" Journal saved for ${summary.journalDays} day")
+                append(if (summary.journalDays == 1) "." else "s.")
+            } else if (summary.hadJournal) {
+                append(" Your journal was already up to date.")
+            }
+            if (summary.recaps > 0) {
+                append(" ${summary.recaps} recap${if (summary.recaps == 1) "" else "s"} saved.")
+            }
+            if (summary.tooLarge > 0) {
+                append(" ${summary.tooLarge} file${if (summary.tooLarge == 1) " was" else "s were"}")
+                append(" too large to back up and stayed on the phone only.")
+            }
             if (summary.movedToMonthFolders > 0) {
                 append(" Moved ${summary.movedToMonthFolders} older file")
                 append(if (summary.movedToMonthFolders == 1) "" else "s")
@@ -168,10 +188,19 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun describe(summary: DriveBackup.RestoreSummary): String = buildString {
+        val journalBack = summary.journalDays > 0 || summary.recaps > 0
         when {
             summary.restored > 0 ->
-                append("Restored ${summary.restored} clip${if (summary.restored == 1) "" else "s"}.")
-            summary.unreadable == 0 -> append("Everything in Drive is already on this phone.")
+                append("Restored ${summary.restored} second${if (summary.restored == 1) "" else "s"}.")
+            summary.unreadable == 0 && !journalBack -> append("Everything in Drive is already on this phone.")
+        }
+        if (summary.journalDays > 0) {
+            if (isNotEmpty()) append(' ')
+            append("Journal restored for ${summary.journalDays} day${if (summary.journalDays == 1) "" else "s"}.")
+        }
+        if (summary.recaps > 0) {
+            if (isNotEmpty()) append(' ')
+            append("${summary.recaps} recap${if (summary.recaps == 1) "" else "s"} restored.")
         }
         if (summary.restored > 0 && summary.alreadyOnPhone > 0) {
             append(" ${summary.alreadyOnPhone} already on this phone were left as they are.")

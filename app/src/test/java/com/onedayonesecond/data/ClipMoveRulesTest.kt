@@ -1,10 +1,12 @@
 package com.onedayonesecond.data
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.util.Locale
 import java.util.TimeZone
 
 class ClipMoveRulesTest {
@@ -97,5 +99,36 @@ class ClipMoveRulesTest {
         assertTrue(selectable(LocalDate.of(2020, 1, 1)))
         assertFalse(selectable(today.plusDays(1)))
         assertFalse(selectable(LocalDate.of(2027, 1, 1)))
+    }
+
+    @Test
+    fun `a typed day is read in the forms people write`() {
+        val expected = LocalDate.of(2026, 11, 15)
+        for (typed in listOf("15 Nov 2026", "15 November 2026", "15 nov 2026", " 15  Nov  2026 ", "15/11/2026", "15-11-2026", "2026-11-15")) {
+            assertEquals(typed, expected, ClipMoveRules.parseDay(typed, today, Locale.ENGLISH))
+        }
+    }
+
+    @Test
+    fun `a day typed without a year is the most recent such day`() {
+        // "today" in these tests is 7 November 2026.
+        assertEquals(LocalDate.of(2026, 11, 3), ClipMoveRules.parseDay("3 Nov", today, Locale.ENGLISH))
+        assertEquals(LocalDate.of(2026, 11, 7), ClipMoveRules.parseDay("7 November", today, Locale.ENGLISH))
+        // 20 December has not happened yet this year, so last year's is meant.
+        assertEquals(LocalDate.of(2025, 12, 20), ClipMoveRules.parseDay("20 Dec", today, Locale.ENGLISH))
+    }
+
+    @Test
+    fun `a typed day in the future is still read, so the dialog can say why it cannot be chosen`() {
+        val typed = ClipMoveRules.parseDay("1 Jan 2027", today, Locale.ENGLISH)
+        assertEquals(LocalDate.of(2027, 1, 1), typed)
+        assertEquals(ClipMoveRules.Check.FUTURE, ClipMoveRules.check(today, typed!!, today, targetHasClip = false))
+    }
+
+    @Test
+    fun `text that is not a day reads as nothing`() {
+        for (typed in listOf("", "   ", "soon", "32 Nov 2026", "15 Smarch 2026", "Nov")) {
+            assertNull(typed, ClipMoveRules.parseDay(typed, today, Locale.ENGLISH))
+        }
     }
 }

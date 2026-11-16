@@ -1,0 +1,140 @@
+package com.onedayonesecond.data
+
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.time.LocalDate
+
+/** The diary side of a day: its mood and place, its entries, and the recaps written from them. */
+class JournalRepository(
+    private val dao: JournalDao,
+    val storage: ClipStorage,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
+
+    fun observeMeta(date: LocalDate): Flow<DayMeta?> = dao.observeMeta(date)
+
+    fun observeMetaBetween(start: LocalDate, end: LocalDate): Flow<List<DayMeta>> =
+        dao.observeMetaBetween(start, end)
+
+    suspend fun meta(date: LocalDate): DayMeta? = dao.meta(date)
+
+    suspend fun metaBetween(start: LocalDate, end: LocalDate): List<DayMeta> = dao.metaBetween(start, end)
+
+    suspend fun allMeta(): List<DayMeta> = dao.allMeta()
+
+    suspend fun setMood(date: LocalDate, mood: Mood?) {
+        dao.upsertMeta((dao.meta(date) ?: DayMeta(date)).copy(mood = mood))
+    }
+
+    /** Sets or, with blank text, clears the day's place. */
+    suspend fun setPlace(date: LocalDate, place: String?) {
+        dao.upsertMeta((dao.meta(date) ?: DayMeta(date)).copy(placeName = place.tidyPlace()))
+    }
+
+    /** Gives the day a place only if it has none yet, so a place the user chose is never overwritten. */
+    suspend fun notePlace(date: LocalDate, place: String?) {
+        val tidy = place.tidyPlace() ?: return
+        val current = dao.meta(date)
+        if (current?.placeName == null) dao.upsertMeta((current ?: DayMeta(date)).copy(placeName = tidy))
+    }
+
+    /** Used by restore, which brings back a whole day's mood and place at once. */
+    suspend fun putMeta(meta: DayMeta) = dao.upsertMeta(meta)
+
+    fun observeEntries(date: LocalDate): Flow<List<Entry>> = dao.observeEntries(date)
+
+    fun observeEntriesBetween(start: LocalDate, end: LocalDate): Flow<List<Entry>> =
+        dao.observeEntriesBetween(start, end)
+
+    suspend fun entriesBetween(start: LocalDate, end: LocalDate): List<Entry> = dao.entriesBetween(start, end)
+
+    suspend fun allEntries(): List<Entry> = dao.allEntries()
+
+    suspend fun entry(id: Long): Entry? = dao.entry(id)
+
+    suspend fun unprocessedEntries(): List<Entry> = dao.unprocessedEntries()
+
+    suspend fun earliestEntryDate(): LocalDate? = dao.earliestEntryDate()
+
+    suspend fun addWritten(date: LocalDate, text: String, place: String?): Entry {
+        val entry = Entry(
+            date = date,
+            createdAt = now(),
+            type = EntryType.WRITTEN,
+            text = text.trim(),
+            placeName = place.tidyPlace(),
+        )
+        notePlace(date, place)
+        return entry.copy(id = dao.insertEntry(entry))
+    }
+
+    /** Changes an entry's words. Also how a typed-out voice note or page is corrected by hand. */
+    suspend fun setText(entry: Entry, text: String) {
+        dao.updateEntry(entry.copy(text = text.trim()))
+    }
+
+    /**
+     * Records an entry whose substance is a file. [scratch] is moved into the journal
+     * folder; entries that [Entry.needsText] start out [ProcessingState.PENDING].
+     *
+     * @param createdAt lets several photos chosen together share one moment, which is
+     * how the day page knows to show them as one row.
+     */
+    suspend fun addMedia(
+        date: LocalDate,
+        type: EntryType,
+        scratch: File,
+        extension: String,
+        place: String?,
+        createdAt: Long = now(),
+    ): Entry = withContext(Dispatchers.IO) {
+        require(type != EntryType.WRITTEN) { "Written entries have no file" }
+        val destination = storage.newJournalFile(date, createdAt, extension)
+        if (!scratch.renameTo(destination)) {
+            scratch.copyTo(destination, overwrite = true)
+            scratch.delete()
+        }
+        val entry = Entry(
+            date = date,
+            createdAt = createdAt,
+            type = type,
+            mediaPath = destination.absolutePath,
+            placeName = place.tidyPlace(),
+        )
+        val pending = if (entry.needsText) entry.copy(processing = ProcessingState.PENDING) else entry
+        notePlace(date, place)
+        pending.copy(id = dao.insertEntry(pending))
+    }
+
+    /** Used by restore: the entry is recorded as it is, media already in place. */
+    suspend fun putEntry(entry: Entry): Entry = entry.copy(id = dao.insertEntry(entry.copy(id = 0)))
+
+    suspend fun setProcessing(id: Long, state: ProcessingState, text: String? = null) {
+        val entry = dao.entry(id) ?: return
+        dao.updateEntry(entry.copy(processing = state, text = text?.trim() ?: entry.text))
+    }
+
+    suspend fun deleteEntry(entry: Entry) = withContext(Dispatchers.IO) {
+        dao.deleteEntry(entry)
+        entry.mediaFile?.delete()
+    }
+
+    fun observeRecap(key: String): Flow<Recap?> = dao.observeRecap(key)
+
+    fun observeRecaps(): Flow<List<Recap>> = dao.observeRecaps()
+
+    suspend fun recap(key: String): Recap? = dao.recap(key)
+
+    suspend fun allRecaps(): List<Recap> = dao.allRecaps()
+
+    suspend fun saveRecap(recap: Recap) = dao.upsertRecap(recap)
+
+    private fun String?.tidyPlace(): String? =
+        this?.trim()?.replace(Regex("\\s+"), " ")?.take(MAX_PLACE_LENGTH)?.ifEmpty { null }
+
+    companion object {
+        const val MAX_PLACE_LENGTH = 60
+    }
+}

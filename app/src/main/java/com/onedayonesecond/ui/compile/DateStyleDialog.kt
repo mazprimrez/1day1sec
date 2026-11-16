@@ -11,14 +11,9 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,11 +41,17 @@ import com.onedayonesecond.media.DateFont
 import com.onedayonesecond.media.DateLabelStyle
 import com.onedayonesecond.media.VideoSpec
 import com.onedayonesecond.media.typeface
+import com.onedayonesecond.ui.theme.AppDialog
+import com.onedayonesecond.ui.theme.AppType
+import com.onedayonesecond.ui.theme.Chip
+import com.onedayonesecond.ui.theme.Palette
+import com.onedayonesecond.ui.theme.QuietButton
+import com.onedayonesecond.ui.theme.RoseButton
 import java.time.LocalDate
 
 /**
- * Lets the user pick the font and position of the text drawn on the reel (the caption
- * and the date under it), with a small preview of a reel frame so the choice can be
+ * Lets the user pick the font and position of the text drawn on the reel (the caption,
+ * the date under it and the place under that), with a small preview of a reel frame so the choice can be
  * judged without building a reel. The preview shows only what is switched on.
  *
  * Choices are held in a draft and only applied with "Apply", because applying
@@ -62,82 +63,67 @@ fun DateStyleDialog(
     current: DateLabelStyle,
     showDates: Boolean,
     showCaptions: Boolean,
+    showPlaces: Boolean,
     onApply: (DateLabelStyle) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var draft by remember { mutableStateOf(current) }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Text style") },
-        text = {
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    FramePreview(draft, showDates, showCaptions)
-                }
+    AppDialog(
+        onDismiss = onDismiss,
+        title = "Text style",
+        buttons = {
+            QuietButton("Cancel", onDismiss, Modifier.weight(1f))
+            RoseButton("Apply", { onApply(draft) }, Modifier.weight(1f))
+        },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                FramePreview(draft, showDates, showCaptions, showPlaces)
+            }
 
-                Section("Font") {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        DateFont.entries.forEach { font ->
-                            FilterChip(
-                                selected = draft.font == font,
-                                onClick = { draft = draft.copy(font = font) },
-                                // Each name in its own font, so the list is its own preview.
-                                label = {
-                                    Text(
-                                        font.label,
-                                        fontFamily = remember(font) { FontFamily(font.typeface()) },
-                                    )
-                                },
-                            )
-                        }
-                    }
-                }
-
-                Section("Side") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DateAlign.entries.forEach { align ->
-                            FilterChip(
-                                selected = draft.align == align,
-                                onClick = { draft = draft.copy(align = align) },
-                                label = { Text(align.label) },
-                            )
-                        }
-                    }
-                }
-
-                Section("Edge") {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DateEdge.entries.forEach { edge ->
-                            FilterChip(
-                                selected = draft.edge == edge,
-                                onClick = { draft = draft.copy(edge = edge) },
-                                label = { Text(edge.label) },
-                            )
-                        }
+            Section("Font") {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DateFont.entries.forEach { font ->
+                        Chip(
+                            text = font.label,
+                            selected = draft.font == font,
+                            onClick = { draft = draft.copy(font = font) },
+                            // Each name in its own font, so the list is its own preview.
+                            textStyle = AppType.Meta.copy(
+                                fontFamily = remember(font) { FontFamily(font.typeface()) },
+                            ),
+                        )
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { onApply(draft) }) { Text("Apply") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Cancel") }
-        },
-    )
+
+            Section("Side") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DateAlign.entries.forEach { align ->
+                        Chip(align.label, draft.align == align, { draft = draft.copy(align = align) })
+                    }
+                }
+            }
+
+            Section("Edge") {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    DateEdge.entries.forEach { edge ->
+                        Chip(edge.label, draft.edge == edge, { draft = draft.copy(edge = edge) })
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
 private fun Section(title: String, content: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = MaterialTheme.typography.labelLarge)
+        Text(title, style = AppType.BodyStrong, color = Palette.Ink)
         content()
     }
 }
@@ -149,7 +135,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  * Compose rather than by the video pipeline).
  */
 @Composable
-private fun FramePreview(style: DateLabelStyle, showDates: Boolean, showCaptions: Boolean) {
+private fun FramePreview(style: DateLabelStyle, showDates: Boolean, showCaptions: Boolean, showPlaces: Boolean) {
     val previewWidth = 150.dp
     val scale = previewWidth.value / VideoSpec.WIDTH
 
@@ -201,6 +187,7 @@ private fun FramePreview(style: DateLabelStyle, showDates: Boolean, showCaptions
         ) {
             if (showCaptions) Text(" Your caption ", style = textStyle(CAPTION_TEXT_SIZE_PX))
             if (showDates) Text(" ${LocalDate.now().format(DATE_LABEL_FORMAT)} ", style = textStyle(DATE_TEXT_SIZE_PX))
+            if (showPlaces) Text(" Your place ", style = textStyle(CAPTION_TEXT_SIZE_PX))
         }
     }
 }

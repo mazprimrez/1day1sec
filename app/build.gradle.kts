@@ -1,9 +1,22 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
 }
+
+// Machine-specific settings that must not be committed. The journal's AI features
+// (typing out voice notes and notebook pages, writing recaps) talk to a backend whose
+// address is set here; left empty, those features wait instead of failing the build.
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use(::load)
+}
+
+fun localString(name: String): String =
+    "\"" + localProperties.getProperty(name, "").replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 android {
     namespace = "com.onedayonesecond"
@@ -17,6 +30,9 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        buildConfigField("String", "JOURNAL_BACKEND_URL", localString("journal.backend.url"))
+        buildConfigField("String", "JOURNAL_BACKEND_KEY", localString("journal.backend.key"))
     }
 
     buildTypes {
@@ -44,6 +60,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -70,7 +87,6 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.navigation.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
@@ -95,7 +111,9 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
 
     implementation(libs.play.services.auth)
+    implementation(libs.play.services.location)
 
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
     androidTestImplementation(libs.androidx.junit)
 }

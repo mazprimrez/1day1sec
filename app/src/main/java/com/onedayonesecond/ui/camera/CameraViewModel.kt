@@ -42,13 +42,24 @@ sealed interface CaptureState {
 }
 
 @UnstableApi
-class CameraViewModel(container: AppContainer) : ViewModel() {
+class CameraViewModel(private val container: AppContainer) : ViewModel() {
 
     private val storage: ClipStorage = container.storage
     private val importer: GalleryImporter = container.importer
 
     private val _state = MutableStateFlow<CaptureState>(CaptureState.Idle)
     val state: StateFlow<CaptureState> = _state.asStateFlow()
+
+    private val _place = MutableStateFlow<String?>(null)
+
+    /** Shown under the date: the day's place, or where the phone is if recording for today. */
+    val place: StateFlow<String?> = _place.asStateFlow()
+
+    fun findPlace(date: java.time.LocalDate) {
+        viewModelScope.launch {
+            _place.value = container.journal.meta(date)?.placeName ?: container.journalActions.placeFor(date)
+        }
+    }
 
     private var recording: Recording? = null
     private var pendingFile: File? = null

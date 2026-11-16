@@ -9,39 +9,42 @@ import org.junit.Test
 class ThumbnailRulesTest {
 
     @Test
-    fun `a tall frame is cropped to a square from its middle`() {
+    fun `a stored clip is already portrait and is kept whole`() {
         assertEquals(
-            ThumbnailRules.Square(x = 0, y = 280, side = 720),
-            ThumbnailRules.centerSquare(720, 1280),
+            ThumbnailRules.Crop(x = 0, y = 0, width = 720, height = 1280),
+            ThumbnailRules.centerPortrait(720, 1280),
         )
     }
 
     @Test
     fun `a wide frame is cropped from the sides`() {
         assertEquals(
-            ThumbnailRules.Square(x = 280, y = 0, side = 720),
-            ThumbnailRules.centerSquare(1280, 720),
+            ThumbnailRules.Crop(x = 437, y = 0, width = 405, height = 720),
+            ThumbnailRules.centerPortrait(1280, 720),
         )
     }
 
     @Test
-    fun `a square frame is kept whole`() {
-        assertEquals(ThumbnailRules.Square(0, 0, 500), ThumbnailRules.centerSquare(500, 500))
+    fun `a frame taller than 9 to 16 loses its top and bottom`() {
+        assertEquals(
+            ThumbnailRules.Crop(x = 0, y = 360, width = 720, height = 1280),
+            ThumbnailRules.centerPortrait(720, 2000),
+        )
     }
 
     @Test
     fun `the crop always stays inside the frame`() {
-        for ((w, h) in listOf(720 to 1280, 1280 to 720, 1081 to 1921, 3 to 1000, 1000 to 3, 1 to 1)) {
-            val s = ThumbnailRules.centerSquare(w, h)
-            assertTrue("$w x $h -> $s", s.x >= 0 && s.y >= 0 && s.side >= 1)
-            assertTrue("$w x $h -> $s", s.x + s.side <= w && s.y + s.side <= h)
+        for ((w, h) in listOf(720 to 1280, 1280 to 720, 1081 to 1921, 3 to 1000, 1000 to 3, 1 to 1, 500 to 500)) {
+            val c = ThumbnailRules.centerPortrait(w, h)
+            assertTrue("$w x $h -> $c", c.x >= 0 && c.y >= 0 && c.width >= 1 && c.height >= 1)
+            assertTrue("$w x $h -> $c", c.x + c.width <= w && c.y + c.height <= h)
         }
     }
 
     @Test
     fun `an empty frame is rejected`() {
-        assertThrows(IllegalArgumentException::class.java) { ThumbnailRules.centerSquare(0, 100) }
-        assertThrows(IllegalArgumentException::class.java) { ThumbnailRules.centerSquare(100, 0) }
+        assertThrows(IllegalArgumentException::class.java) { ThumbnailRules.centerPortrait(0, 100) }
+        assertThrows(IllegalArgumentException::class.java) { ThumbnailRules.centerPortrait(100, 0) }
     }
 
     @Test

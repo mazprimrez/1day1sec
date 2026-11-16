@@ -202,12 +202,17 @@ class DriveApi(private val accessToken: String) {
 
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 
-    private companion object {
-        const val FILES_URL = "https://www.googleapis.com/drive/v3/files"
-        const val UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
-        const val FOLDER_MIME = "application/vnd.google-apps.folder"
+    companion object {
+        /**
+         * The largest file [upload] accepts. Public so a backup can leave out anything
+         * bigger instead of failing on it.
+         */
         const val MAX_SIMPLE_UPLOAD_BYTES = 5 * 1024 * 1024 - 4096 // headroom for the metadata part
-        const val CONNECT_TIMEOUT_MS = 15_000
-        const val READ_TIMEOUT_MS = 60_000
+
+        private const val FILES_URL = "https://www.googleapis.com/drive/v3/files"
+        private const val UPLOAD_URL = "https://www.googleapis.com/upload/drive/v3/files"
+        private const val FOLDER_MIME = "application/vnd.google-apps.folder"
+        private const val CONNECT_TIMEOUT_MS = 15_000
+        private const val READ_TIMEOUT_MS = 60_000
     }
 }

@@ -1,6 +1,7 @@
 package com.onedayonesecond.ui.nav
 
 import android.util.Base64
+import com.onedayonesecond.journal.RecapPeriod
 import java.io.File
 import java.time.LocalDate
 
@@ -8,13 +9,31 @@ object Routes {
 
     const val ARG_DATE = "date"
     const val ARG_PATH = "path"
+    const val ARG_ENTRY = "entry"
+    const val ARG_KEY = "key"
+    const val ARG_YEAR = "year"
 
-    const val HOME = "home"
-    const val COMPILE = "compile"
-    const val BACKUP = "backup"
+    // The three tabs.
+    const val DAYS = "days"
+    const val RECAPS = "recaps"
+    const val REEL = "reel"
+    val TABS = setOf(DAYS, RECAPS, REEL)
+
+    const val DELETED = "deleted"
+    const val DAY_PATTERN = "day/{$ARG_DATE}"
     const val CAMERA_PATTERN = "camera/{$ARG_DATE}"
     const val GALLERY_DAY_PATTERN = "gallery/{$ARG_DATE}"
     const val TRIM_PATTERN = "trim/{$ARG_DATE}/{$ARG_PATH}"
+    const val WRITE_PATTERN = "write/{$ARG_DATE}?$ARG_ENTRY={$ARG_ENTRY}"
+    const val VOICE_PATTERN = "voice/{$ARG_DATE}"
+    const val PEN_PATTERN = "pen/{$ARG_DATE}"
+    const val RECAP_PATTERN = "recap/{$ARG_KEY}"
+    const val PIXELS_PATTERN = "pixels/{$ARG_YEAR}"
+
+    /** No entry to edit: the write screen starts a new one. */
+    const val NO_ENTRY = -1L
+
+    fun day(date: LocalDate) = "day/${date.toEpochDay()}"
 
     fun camera(date: LocalDate) = "camera/${date.toEpochDay()}"
 
@@ -22,6 +41,16 @@ object Routes {
 
     fun trim(date: LocalDate, file: File) =
         "trim/${date.toEpochDay()}/${encodePath(file.absolutePath)}"
+
+    fun write(date: LocalDate, entryId: Long = NO_ENTRY) = "write/${date.toEpochDay()}?$ARG_ENTRY=$entryId"
+
+    fun voice(date: LocalDate) = "voice/${date.toEpochDay()}"
+
+    fun pen(date: LocalDate) = "pen/${date.toEpochDay()}"
+
+    fun recap(period: RecapPeriod) = "recap/${period.key}"
+
+    fun pixels(year: Int) = "pixels/$year"
 
     // Base64url rather than Uri.encode: NavController percent-decodes route
     // segments before matching, so an encoded '/' in a file path would split the

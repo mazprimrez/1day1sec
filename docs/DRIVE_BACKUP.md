@@ -1,7 +1,7 @@
 # Google Drive backup
 
-The backup screen (cloud icon on the home screen) copies every clip into a
-`1day1sec` folder in the user's own Google Drive, filed by month, and can restore
+The backup section of the Reel tab copies every clip, and each day's journal, into
+a `1day1sec` folder in the user's own Google Drive, filed by month, and can restore
 them on a new phone. It is opt-in: the app makes no network calls until you tap
 **Back up now** or **Restore from Drive** and approve access.
 
@@ -29,11 +29,17 @@ month's clips named by day:
     2026-10-31.mp4
   2026-11/
     2026-11-01.mp4
+    2026-11-01.json                  the day's mood, place and entries
+    2026-11-01-1793500000000.m4a     an entry's voice note, photo or pen page
     2026-11-02.mp4
+    recap-week-2026-11-02.json
+    recap-month-2026-11.json
+  recap-year-2026.json
   captions.json
 ```
 
 `captions.json` holds the captions the user wrote for their clips (see below).
+The journal files are described under "The journal" further down.
 
 The day is always read from the file name, never from the folder, so a file that
 ends up in the wrong folder is still restored to the right day. The layout lives
@@ -55,8 +61,8 @@ There is no local record of what was uploaded. Each run:
    same day in the top folder is deleted. The first version of the backup put
    everything flat in the top folder, and this tidies that up as it goes.
 
-5. **Moved clips.** Moving a clip to another date on the phone (press and hold a
-   day) leaves the clip's old day empty, but its copy in Drive would still be
+5. **Moved clips.** Moving a clip to another date on the phone (⋯ on the day's
+   page) leaves the clip's old day empty, but its copy in Drive would still be
    there, and a restore would bring it back on the wrong day. So a move notes the
    old day in a small local list (`PendingDriveRemovals`), and the backup deletes
    that day's file from Drive once all the uploads are done, so the clip is safely
@@ -83,6 +89,46 @@ interrupted run continues where it stopped.
 Backup is otherwise one-way: clips you **delete** on the phone are not deleted
 from Drive. Only the old copy of a clip you **moved** is removed (step 5).
 
+## The journal
+
+A day's mood, place and entries are in the app's database, and its voice notes,
+photos and pen pages are files in the app's private storage. None of that is in the
+clip, so the backup puts it beside the clip, in the same month folder:
+
+- **`<date>.json`**, one per day that has a mood, a place or an entry. Readable by
+  anyone who opens it: the mood, the place, and each entry with the moment it was
+  made, its kind, its words, and the name of its media file if it has one.
+- **The media files**, named by day and the moment the entry was made
+  (`2026-11-01-1793500000000.m4a`), which is also their name on the phone. They go
+  up before the day's file, so the file never points at media that is not there yet.
+- **`recap-<key>.json`**, one per recap. A week's is filed in the month it is listed
+  under in the app, a month's in its own folder, and a year's beside the month folders.
+
+Like everything else, each is compared by checksum and only uploaded when it changed.
+
+The day's file is a **merge**, for the same reason the captions are. If Drive's copy
+differs from the phone's, it is downloaded and combined: an entry that is in Drive
+but not on the phone is kept, an entry on both is taken from the phone (it may have
+been edited, or typed out since), and the phone's mood and place win where it has
+them. So a new phone that has only a mood for some day cannot wipe that day's
+entries from the backup. The other side of that: an entry **deleted** on the phone
+stays in Drive, as a deleted clip does.
+
+A journal file larger than Drive's single-request limit (just under 5 MB) is left
+out and counted in the result, instead of failing the whole run. Photos are shrunk
+on the way in and voice notes are capped at five minutes, so in practice nothing
+reaches that size.
+
+**Restore** brings back the journal of any day for which the phone has nothing at
+all: no mood, no place, no entry. Each entry's media is downloaded with it; an entry
+whose media is missing from Drive is skipped. Recaps the phone does not have are
+restored too. A voice note or page that was backed up before its words were typed
+out comes back still waiting, and is typed out once the phone is online.
+
+The file formats and the merge are in `backup/JournalFile.kt`, unit-tested
+(`JournalFileTest`). As with the clips, the real calls to Drive have not been tested
+against a live account.
+
 ## When the connection drops
 
 A backup is around a hundred requests in a row on a phone's network, so something
@@ -103,7 +149,7 @@ first dropped request, which with 82 clips is a real problem. Now:
   that name *and* checksum and, if it is there, uses it. Creating a folder does the
   same. Deleting a file that is already gone counts as success.
 - **The screen stays on** while a backup or restore runs (the phone may cut the
-  network when the screen turns off). Leaving the backup screen cancels the run.
+  network when the screen turns off). The run keeps going if you switch to another tab, but closing the app cancels it.
 - **Nothing is lost if it still fails.** The next run skips what is already in Drive
   (see "How a backup run works"), so tapping again carries on where it stopped. The
   message says how many clips were already done and shows the system's own wording
@@ -164,7 +210,7 @@ console is redesigned from time to time, so menu names below may differ a little
    | Package name | `com.onedayonesecond` |
    | SHA-1 certificate fingerprint | the debug fingerprint below |
 
-5. **Run the app, open the cloud icon, tap Back up now.** Google shows its consent
+5. **Run the app, open the Reel tab, tap Back up now.** Google shows its consent
    screen the first time (an "unverified app" warning is normal in Testing mode:
    *Advanced → Go to 1day1sec*). Nothing needs to be pasted into the project.
 
