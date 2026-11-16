@@ -11,6 +11,7 @@ import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.data.ClipEntity
 import com.onedayonesecond.media.DateLabelStyle
 import com.onedayonesecond.media.DatedClip
+import com.onedayonesecond.media.GalleryRules
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -163,7 +164,7 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
 
     /**
      * "Make my reel": stitches the range's seconds together and saves the result to
-     * Movies/1day1sec in one go. The finished reel stays here to be played.
+     * Movies/Kilasan in one go. The finished reel stays here to be played.
      */
     fun makeReel() {
         if (job?.isActive == true) return
@@ -225,7 +226,7 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
 
         viewModelScope.launch {
             try {
-                val name = "1day1sec-${LocalDate.now().format(FILE_DATE)}.mp4"
+                val name = "${GalleryRules.OWN_EXPORT_PREFIX}${LocalDate.now().format(FILE_DATE)}.mp4"
                 container.exporter.exportToGallery(reel, name)
                 _state.update { it.copy(phase = CompilePhase.EXPORTED, exportedName = name) }
             } catch (e: Exception) {

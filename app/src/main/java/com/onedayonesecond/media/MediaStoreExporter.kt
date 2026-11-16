@@ -72,6 +72,6 @@ class MediaStoreExporter(private val context: Context) {
         }
 
     private companion object {
-        const val ALBUM = "1day1sec"
+        const val ALBUM = "Kilasan"
     }
 }

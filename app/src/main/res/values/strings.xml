@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">1day1sec</string>
+    <string name="app_name">Kilasan</string>
     <string name="reminder_channel_name">Daily reminder</string>
     <string name="reminder_channel_description">Reminds you to record today\'s second.</string>
     <string name="reminder_title">Capture today\'s second</string>

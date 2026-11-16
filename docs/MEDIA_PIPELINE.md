@@ -111,5 +111,5 @@ service would be needed for that.
 ## Export
 
 The compiled reel lives in `cacheDir` until the user explicitly saves it.
-`MediaStoreExporter` copies it into `Movies/1day1sec/` through `MediaStore`,
+`MediaStoreExporter` copies it into `Movies/Kilasan/` through `MediaStore`,
 using `IS_PENDING` on API 29+ so gallery apps do not index a half-written file.

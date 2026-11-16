@@ -225,7 +225,7 @@ fun PlaceDialog(
             if (notFound) {
                 MetaText(
                     "The phone couldn't tell where it is. Check that location is on and allowed " +
-                        "for 1day1sec, or type the place.",
+                        "for Kilasan, or type the place.",
                     Modifier.padding(top = 8.dp),
                     color = Palette.Ink,
                 )

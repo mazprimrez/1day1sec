@@ -21,7 +21,9 @@ class DriveException(
  * The Drive v3 calls the backup needs, over plain HTTPS.
  *
  * Every method blocks, so call them from Dispatchers.IO. Verbs are limited to
- * GET, POST and DELETE on purpose: HttpURLConnection on Android rejects PATCH.
+ * GET, POST and DELETE on purpose: HttpURLConnection on Android rejects PATCH. The
+ * one change to an existing file, [rename], is a POST that Google is told to treat
+ * as a PATCH.
  *
  * Every call retries a few times when it fails for a reason that can pass (see
  * [Retry]), so a brief loss of connection does not end a long backup. Calls that
@@ -98,7 +100,7 @@ class DriveApi(private val accessToken: String) {
         require(bytes.size <= MAX_SIMPLE_UPLOAD_BYTES) {
             "$name is too large (${bytes.size / 1024} KB) for a simple upload"
         }
-        val boundary = "1day1sec-${System.nanoTime()}"
+        val boundary = "kilasan-${System.nanoTime()}"
         val metadata = JSONObject()
             .put("name", name)
             .put("parents", JSONArray().put(folderId))
@@ -146,15 +148,24 @@ class DriveApi(private val accessToken: String) {
         }
     }
 
+    /** Gives a file or folder a new name. Its contents and its id stay as they are. */
+    fun rename(fileId: String, name: String) {
+        // Renaming twice ends the same way as renaming once, so it is safe to retry.
+        Retry.run {
+            postJson("$FILES_URL/$fileId?fields=id", JSONObject().put("name", name).toString(), asPatch = true)
+        }
+    }
+
     // --- plumbing -------------------------------------------------------------
 
     private fun get(url: String): JSONObject = Retry.run {
         JSONObject(String(readBytes(open(url, "GET"))))
     }
 
-    private fun postJson(url: String, body: String): JSONObject {
+    private fun postJson(url: String, body: String, asPatch: Boolean = false): JSONObject {
         val connection = open(url, "POST")
         connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+        if (asPatch) connection.setRequestProperty("X-HTTP-Method-Override", "PATCH")
         connection.doOutput = true
         connection.outputStream.use { it.write(body.toByteArray()) }
         return JSONObject(String(readBytes(connection)))

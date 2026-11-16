@@ -30,15 +30,15 @@ import java.util.Locale
 /**
  * Draws a year in pixels as a 1080 x 1920 picture (a phone wallpaper or story, in
  * other words) and saves it to the gallery: the title, the grid, a legend with the
- * number of days per mood, and a small 1day1sec mark.
+ * number of days per mood, and a small Kilasan mark.
  */
 class PixelsExporter(private val context: Context) {
 
-    /** @return the file name it was saved under, in Pictures/1day1sec. */
+    /** @return the file name it was saved under, in Pictures/Kilasan. */
     suspend fun export(year: Int, moods: Map<LocalDate, Mood>, today: LocalDate): String =
         withContext(Dispatchers.IO) {
             val picture = draw(year, moods, today)
-            val name = "1day1sec-$year-in-pixels.png"
+            val name = "kilasan-$year-in-pixels.png"
             try {
                 save(picture, name)
             } finally {
@@ -130,7 +130,7 @@ class PixelsExporter(private val context: Context) {
             canvas.drawText("$days", x + 50f + name.measureText(mood.label) + 12f, y + 27f, count)
         }
 
-        canvas.drawText("1day1sec", WIDTH / 2f, HEIGHT - 70f, text(26f, 600, MUTED, Paint.Align.CENTER))
+        canvas.drawText("Kilasan", WIDTH / 2f, HEIGHT - 70f, text(26f, 600, MUTED, Paint.Align.CENTER))
         return bitmap
     }
 
@@ -177,7 +177,7 @@ class PixelsExporter(private val context: Context) {
         const val WIDTH = 1080
         const val HEIGHT = 1920
         const val MARGIN = 96f
-        const val ALBUM = "1day1sec"
+        const val ALBUM = "Kilasan"
 
         // The app's palette (ui/theme/Theme.kt), as plain colour ints: this class draws
         // with android.graphics, not Compose.

@@ -1,7 +1,7 @@
 # Google Drive backup
 
 The backup section of the Reel tab copies every clip, and each day's journal, into
-a `1day1sec` folder in the user's own Google Drive, filed by month, and can restore
+a `Kilasan` folder in the user's own Google Drive, filed by month, and can restore
 them on a new phone. It is opt-in: the app makes no network calls until you tap
 **Back up now** or **Restore from Drive** and approve access.
 
@@ -9,7 +9,7 @@ them on a new phone. It is opt-in: the app makes no network calls until you tap
 
 The app asks for a single scope, `drive.file`. Google restricts that scope to
 files **the app itself created** — it cannot list, read or change anything else in
-the Drive. That also means the `1day1sec` folder must be created by the app; a
+the Drive. That also means the `Kilasan` folder must be created by the app; a
 folder you make by hand in the Drive web UI is invisible to it.
 
 ## Privacy
@@ -24,7 +24,7 @@ One folder per month, named `yyyy-MM` so they sort chronologically, holding that
 month's clips named by day:
 
 ```
-1day1sec/
+Kilasan/
   2026-10/
     2026-10-31.mp4
   2026-11/
@@ -50,7 +50,10 @@ in `backup/DriveLayout.kt` and is unit-tested (`DriveLayoutTest`).
 There is no local record of what was uploaded. Each run:
 
 1. Gets an access token from Google (silent after the first approval).
-2. Finds or creates the `1day1sec` folder and lists what is directly inside it.
+2. Finds or creates the `Kilasan` folder and lists what is directly inside it. A
+   backup made while the app was called 1day1sec sits in a `1day1sec` folder; that
+   folder is renamed to `Kilasan` first, so the backup carries on in place. (If the
+   renaming fails, the folder is used under its old name and renamed next time.)
 3. For every local clip, finds or creates that month's folder and lists it (once
    per month), then compares checksums with the clip in that folder:
    - same name, same MD5 → skipped;

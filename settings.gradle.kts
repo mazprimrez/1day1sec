@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "1day1sec"
+rootProject.name = "kilasan"
 include(":app")
