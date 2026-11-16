@@ -8,6 +8,7 @@ import com.onedayonesecond.data.AppDatabase
 import com.onedayonesecond.data.ClipRepository
 import com.onedayonesecond.data.ClipStorage
 import com.onedayonesecond.data.DateStyleStore
+import com.onedayonesecond.ai.BackendAuth
 import com.onedayonesecond.ai.BackendJournalAi
 import com.onedayonesecond.ai.JournalAi
 import com.onedayonesecond.data.JournalPrefs
@@ -54,9 +55,8 @@ class AppContainer(context: Context) {
     val journal by lazy { JournalRepository(database.journalDao(), storage) }
     val journalPrefs by lazy { JournalPrefs(appContext) }
     val places by lazy { PlaceFinder(appContext) }
-    val ai: JournalAi by lazy {
-        BackendJournalAi(BuildConfig.JOURNAL_BACKEND_URL, BuildConfig.JOURNAL_BACKEND_KEY)
-    }
+    val backendAuth by lazy { BackendAuth(appContext) }
+    val ai: JournalAi by lazy { BackendJournalAi(BuildConfig.JOURNAL_BACKEND_URL, backendAuth) }
     val entryProcessor by lazy { EntryProcessor(journal, ai) }
     val journalActions by lazy { JournalActions(appContext, journal, places, entryProcessor, appScope) }
     val recapGenerator by lazy { RecapGenerator(repository, journal, ai, journalPrefs) }

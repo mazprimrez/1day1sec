@@ -2,6 +2,7 @@ package com.onedayonesecond.journal
 
 import com.onedayonesecond.ai.AiException
 import com.onedayonesecond.ai.AiNotConfiguredException
+import com.onedayonesecond.ai.AiSignInNeededException
 import com.onedayonesecond.ai.JournalAi
 import com.onedayonesecond.data.ClipRepository
 import com.onedayonesecond.data.JournalPrefs
@@ -112,6 +113,8 @@ class RecapGenerator(
             throw e
         } catch (e: AiNotConfiguredException) {
             return Outcome.NotSetUp
+        } catch (e: AiSignInNeededException) {
+            return Outcome.Failed(e.message ?: "Confirm your Google account first.")
         } catch (e: IOException) {
             return Outcome.Offline
         } catch (e: AiException) {

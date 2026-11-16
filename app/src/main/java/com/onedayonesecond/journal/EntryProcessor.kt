@@ -2,6 +2,7 @@ package com.onedayonesecond.journal
 
 import com.onedayonesecond.ai.AiException
 import com.onedayonesecond.ai.AiNotConfiguredException
+import com.onedayonesecond.ai.AiSignInNeededException
 import com.onedayonesecond.ai.JournalAi
 import com.onedayonesecond.data.Entry
 import com.onedayonesecond.data.EntryType
@@ -65,6 +66,9 @@ class EntryProcessor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: AiNotConfiguredException) {
+            ProcessingState.FAILED
+        } catch (e: AiSignInNeededException) {
+            // The app asks to confirm the Google account; "Try again" works once it is allowed.
             ProcessingState.FAILED
         } catch (e: IOException) {
             ProcessingState.WAITING_FOR_NETWORK

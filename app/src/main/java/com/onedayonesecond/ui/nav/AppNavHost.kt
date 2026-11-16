@@ -17,7 +17,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -53,6 +57,7 @@ import com.onedayonesecond.ui.reel.ReelScreen
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.MessageAction
 import com.onedayonesecond.ui.theme.MessageBar
 import com.onedayonesecond.ui.theme.Palette
 import com.onedayonesecond.ui.trim.TrimScreen
@@ -65,6 +70,26 @@ fun AppNavHost() {
     val navController = rememberNavController()
     val container = (LocalContext.current.applicationContext as OneDayApp).container
     val message by container.messages.current.collectAsStateWithLifecycle()
+
+    // Typing out and letters go through the backend, which only answers its owner. The
+    // first time, Google has to ask before it tells the backend who is using the app.
+    val consent by container.backendAuth.consent.collectAsStateWithLifecycle()
+    val consentLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        if (container.backendAuth.onConsentResult(result.data)) {
+            container.messages.show("Allowed. Tap “Try again” on anything that was not typed out.")
+        }
+    }
+    LaunchedEffect(consent) {
+        val pending = consent ?: return@LaunchedEffect
+        container.messages.show(
+            "Typing out and letters need to confirm your Google account once.",
+            MessageAction("Allow", run = {
+                consentLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
+            }),
+        )
+    }
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
 

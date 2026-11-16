@@ -86,7 +86,7 @@ rather than FFmpeg, and why clips are normalised on the way in.
 See [docs/DRIVE_BACKUP.md](docs/DRIVE_BACKUP.md) for how the Drive backup works
 and the one-time Google Cloud setup it needs before it will sign in.
 See [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md) for the AI backend the
-journal expects, which is not part of this repository.
+journal talks to; its code is in [backend/](backend/README.md).
 
 ## Behaviour worth knowing
 
@@ -228,8 +228,9 @@ journal expects, which is not part of this repository.
   photo picker, location, and the version 2 to 3 database migration on a real
   install are the things to check first. (The migration's SQL was compared,
   statement by statement, with the schema Room generates.)
-- There is no AI backend yet, so nothing is typed out and no recap is written until
-  one exists. See [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md).
+- Typing out and recaps need the AI backend (`backend/`) deployed and its address
+  set in `local.properties`; without that nothing is typed out and no recap is
+  written. See [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md).
 - Light theme only. The app ignores the phone's dark mode.
 - Deleting an entry (writing, voice note, photo) is confirmed first but cannot be
   undone; only seconds go through Recently deleted.

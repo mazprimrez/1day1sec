@@ -4,16 +4,18 @@ import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
+import java.net.HttpRetryException
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
  * The three things the journal asks an AI model to do. The model (Gemini Flash-Lite)
- * is never called from the phone: requests go to the app's backend, which holds the
- * model key. See docs/JOURNAL_BACKEND.md for the contract.
+ * is never called from the phone: requests go to the app's backend, which is the only
+ * thing allowed to reach the model. See docs/JOURNAL_BACKEND.md for the contract.
  *
- * Every call throws [IOException] when the phone cannot reach the backend, and
- * [AiException] when the backend answers with an error.
+ * Every call throws [IOException] when the phone cannot reach the backend,
+ * [AiException] when the backend answers with an error, and
+ * [AiSignInNeededException] when Google must first ask the user who they are.
  */
 interface JournalAi {
 
@@ -39,8 +41,12 @@ class AiException(val status: Int, message: String) : Exception(message) {
 class AiNotConfiguredException :
     Exception("The AI service is not set up for this build. Set journal.backend.url in local.properties.")
 
-/** Plain HTTPS calls to the backend, in the same style as the Drive calls: no client library. */
-class BackendJournalAi(baseUrl: String, private val key: String) : JournalAi {
+/**
+ * Plain HTTPS calls to the backend, in the same style as the Drive calls: no client
+ * library. Each request carries a Google access token from [tokens], which is how the
+ * backend knows the request comes from its owner.
+ */
+class BackendJournalAi(baseUrl: String, private val tokens: AccessTokens) : JournalAi {
 
     private val base = baseUrl.trim().trimEnd('/')
 
@@ -64,31 +70,46 @@ class BackendJournalAi(baseUrl: String, private val key: String) : JournalAi {
         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             if (!isConfigured) throw AiNotConfiguredException()
             val body = readBody()
-            val connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                doOutput = true
-                setRequestProperty("Content-Type", contentType)
-                setRequestProperty("Accept", "application/json")
-                if (key.isNotEmpty()) setRequestProperty("Authorization", "Bearer $key")
-                setFixedLengthStreamingMode(body.size)
+            val token = tokens.current()
+            var reply = send(path, contentType, body, token)
+            if (reply.status == HttpURLConnection.HTTP_UNAUTHORIZED) {
+                // The token may simply have run out. Ask Google for a fresh one, once.
+                tokens.discard(token)
+                reply = send(path, contentType, body, tokens.current())
             }
+            if (reply.status !in 200..299) throw AiException(reply.status, errorMessage(reply.status, reply.text))
             try {
-                connection.outputStream.use { it.write(body) }
-                val status = connection.responseCode
-                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-                val reply = stream?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty()
-                if (status !in 200..299) throw AiException(status, errorMessage(status, reply))
-                try {
-                    JSONObject(reply)
-                } catch (e: JSONException) {
-                    throw AiException(status, "The AI service sent an answer that could not be read.")
-                }
-            } finally {
-                connection.disconnect()
+                JSONObject(reply.text)
+            } catch (e: JSONException) {
+                throw AiException(reply.status, "The AI service sent an answer that could not be read.")
             }
         }
+
+    private class Reply(val status: Int, val text: String)
+
+    private fun send(path: String, contentType: String, body: ByteArray, token: String): Reply {
+        val connection = (URL(base + path).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = CONNECT_TIMEOUT_MS
+            readTimeout = READ_TIMEOUT_MS
+            doOutput = true
+            setRequestProperty("Content-Type", contentType)
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Authorization", "Bearer $token")
+            setFixedLengthStreamingMode(body.size)
+        }
+        return try {
+            connection.outputStream.use { it.write(body) }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            Reply(status, stream?.use { it.readBytes().toString(Charsets.UTF_8) }.orEmpty())
+        } catch (e: HttpRetryException) {
+            // Some platforms report "not signed in" this way for a body that was streamed.
+            Reply(e.responseCode(), "")
+        } finally {
+            connection.disconnect()
+        }
+    }
 
     private fun errorMessage(status: Int, reply: String): String {
         val detail = runCatching { JSONObject(reply).optString("error") }.getOrNull().orEmpty()

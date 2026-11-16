@@ -32,7 +32,6 @@ android {
         versionName = "0.1.0"
 
         buildConfigField("String", "JOURNAL_BACKEND_URL", localString("journal.backend.url"))
-        buildConfigField("String", "JOURNAL_BACKEND_KEY", localString("journal.backend.key"))
     }
 
     buildTypes {
