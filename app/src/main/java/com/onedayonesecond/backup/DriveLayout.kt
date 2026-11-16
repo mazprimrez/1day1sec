@@ -8,7 +8,7 @@ import java.time.YearMonth
  * Free of Android types so it can be unit-tested on a plain JVM.
  *
  * ```
- * 1day1sec/
+ * Kilasan/
  *   2026-10/
  *     2026-10-31.mp4
  *   2026-11/
@@ -29,7 +29,32 @@ import java.time.YearMonth
  */
 object DriveLayout {
 
-    const val ROOT_FOLDER = "1day1sec"
+    const val ROOT_FOLDER = "Kilasan"
+
+    /** What the folder was called while the app was named 1day1sec. A backup found under it is renamed. */
+    const val FORMER_ROOT_FOLDER = "1day1sec"
+
+    /**
+     * The id of the backup's folder, or null if this Drive has none.
+     *
+     * A backup made while the app was called 1day1sec sits in a folder of that name. It
+     * is the same backup, so it is renamed rather than left behind and started again.
+     * If the renaming fails the folder is used as it is: its name is cosmetic, what is
+     * in it is not, and the next backup tries the renaming again.
+     *
+     * @param find the id of the top-level folder with a name, or null
+     * @param rename gives the folder with an id a new name
+     */
+    fun findRoot(find: (name: String) -> String?, rename: (id: String, name: String) -> Unit): String? {
+        find(ROOT_FOLDER)?.let { return it }
+        val former = find(FORMER_ROOT_FOLDER) ?: return null
+        try {
+            rename(former, ROOT_FOLDER)
+        } catch (e: Exception) {
+            // Used under its old name; see above.
+        }
+        return former
+    }
 
     /** Holds the clips' captions, which live in the app's database rather than in the videos. */
     const val CAPTIONS_FILE = "captions.json"

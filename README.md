@@ -1,34 +1,129 @@
-# 1day1sec
+# Kilasan
 
-A diary built around one second of video a day. Record the day's second, add some
-writing, a voice note, a photo or a pen page, note how the day felt, read a letter
-about your week, and stitch the year into a single video.
+Kilasan is an Android diary built around one second of video a day. ("Kilasan" is
+Indonesian for a glimpse.) You record the day's second, add as much or as little as
+you like around it (a few lines, a voice note, a photo, a page from your notebook)
+and note how the day felt. Every week, month and year it writes you a letter about
+what you wrote, and at any time it can stitch your seconds into a single video.
 
-Local by default, no account. Two things can leave the device, and both are opt-in:
-a backup to your own Google Drive, and the features that need an AI model (typing
-out voice notes and notebook pages, writing recaps), which send what they need to
-the app's backend. No backend is configured by default, and then nothing is sent:
-see [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md).
+Everything is kept on your phone, and there is no account to make. Two things can
+leave the phone, and both are your choice: a backup to your own Google Drive, and
+the features that need an AI model (typing out voice notes and notebook pages,
+writing the letters).
 
-The design this was built from is [JOURNAL_DESIGN.md](JOURNAL_DESIGN.md).
+## What it looks like
 
-## Getting it running
+![Three screens of Kilasan. Days: November as a calendar with a tile for each day that has a second, today outlined, and an Add to today button. Add: record today's second, write, voice note, photo, or draw with S Pen. Reel: choose the days, the text on each second and the Google Drive backup, then Make my reel.](docs/screenshots/screens-tabs.png)
 
-There is no Gradle wrapper JAR checked in (it is a binary). Either:
+![Three more screens. A day: the day's second with its mood, caption and place, then entries: writing, a voice note, a notebook page, a pen page and photos. A letter: a title, a quote from the week's entries, each day's mood, what happened, a note, what changed since last week and two things to try. Year in pixels: one square per day of 2026 coloured by mood, with a count of each mood and a Download PNG button.](docs/screenshots/screens-pages.png)
 
-- open the project in Android Studio, which generates the wrapper on first
-  sync, or
-- run `gradle wrapper --gradle-version 8.9` once with a local Gradle install.
+These are the screens as designed, with made-up entries, not captures from a phone.
+In the app the pink tiles are frames from your own videos and photos.
 
-Then `./gradlew installDebug` with a device attached. (Once Android Studio has
-synced, the Gradle it downloaded can also be run directly from
-`~/.gradle/wrapper/dists/gradle-8.9-bin/*/gradle-8.9/bin/gradle`.) The emulator can record,
-but a physical device is worth using — encoder behaviour on the emulator is not
-representative.
+## What it is for
 
-Requires JDK 17 and Android SDK 35. Minimum runtime is API 26.
+A diary is easy to start and hard to keep. One second of video is small enough to do
+every day, including the days with nothing to say, and a whole year of them plays
+back in about six minutes.
 
-## Flow
+Kilasan is for:
+
+- **Keeping a record of ordinary days** without it becoming a chore. The second is
+  the only thing a day needs, and a reminder at 8 pm asks for it only if it is
+  still missing.
+- **Saying more on the days that have more.** Write, talk, add photos, or
+  photograph what you wrote on paper. Talking and handwriting are typed out for
+  you, so everything ends up as words you can read back.
+- **Looking back.** A letter about each week, month and year, a picture of the
+  year's moods, and a reel of your seconds.
+
+It was built for one person's own use, and it shows in a few places: there is one
+language pairing it is tuned for (Indonesian mixed with English), and the AI
+backend answers a single Google account.
+
+## What it can do
+
+**Each day**
+
+- Record up to five seconds and keep the best one, or pick a video already on the
+  phone. One second per day; taking a day again replaces it.
+- Give the second a caption, the day a mood (five faces, rough to great) and a
+  place ("Kemang, Jakarta Selatan"; the coordinates are not stored).
+- Add entries: writing, voice notes of up to five minutes, photos, photos of
+  notebook pages, and pages drawn with the S Pen.
+- Have voice notes, notebook pages and pen pages typed out. Speech is written word
+  for word in the languages it was spoken in.
+- Fill in past days, with a dot on the days that have videos in your gallery but
+  no second yet.
+- Undo: a deleted or replaced second waits in "Recently deleted" for 30 days.
+
+**Looking back**
+
+- A month calendar with a frame from each day's second.
+- A letter for each week, month and year: what happened, a short note, a quote in
+  your own words, what changed since the period before, and two things to try.
+- The year in pixels: one cell per day in the colour of its mood, saved as a
+  picture.
+
+**The reel**
+
+- Stitch any range of days into one video, with the date, caption and place drawn
+  on each second, in a font and position you choose. Saved to `Movies/Kilasan`.
+
+**Keeping it safe**
+
+- Back up to a `Kilasan` folder in your own Google Drive, one folder per month,
+  and restore from it on a new phone.
+
+## How it works
+
+```
+ camera ─▶ trim ─▶ one second per day ──┐
+ writing, voice notes, photos, pages ───┼─▶ kept on the phone ─▶ reel ─▶ Movies/Kilasan
+ mood, place ───────────────────────────┘      │        │
+                                                │        └─▶ your Google Drive (when you tap Back up now)
+                                                ▼
+                  voice notes, notebook and pen pages, a period's entries
+                                                │
+                                                ▼
+                        the backend (Cloud Run) ─▶ Gemini Flash-Lite
+                                                │
+                                                ▼
+                              typed-out words and letters, back on the phone
+```
+
+- **The second.** The camera records up to five seconds, and the trim screen picks
+  which one-second window to keep. That second is re-encoded to one fixed format, so
+  that any two days can later be joined without re-encoding trouble, and stored in
+  the app's private storage under its date.
+- **The journal.** Entries, moods and places live in a database on the phone, with
+  voice notes, photos and pen pages as files beside it. An entry is saved on the
+  phone before anything else is attempted, so nothing below can lose one.
+- **Typing out.** A voice note, a photo you mark as a notebook page, or a pen page
+  is sent to a small backend, which asks Google's Gemini Flash-Lite model for the
+  words and sends them back. Ordinary photos are never sent. Offline, the entry
+  waits and is retried by itself.
+- **Letters.** A job on the phone runs each night after 9 pm and writes whichever
+  letter is due: the week's on Sunday, the month's on the 1st, the year's on 31
+  December. It sends that period's entries and numbers to the backend, which
+  returns the letter. A period needs three days with an entry. The quote is checked
+  against your entries, so a letter never shows words you did not write.
+- **The backend** is a FastAPI service on Cloud Run ([backend/](backend/README.md)).
+  It holds no data. It answers one Google account only: the app sends proof of who
+  is signed in with each request, and Google confirms it. The model is named by one
+  setting, so moving to a newer one is a one-line change. Without a backend
+  configured, nothing is sent and those two features simply say so.
+- **The reel** is built on the phone. The text is drawn as the reel is made and the
+  stored seconds are never changed, so it can be made again differently at any time.
+- **Backup** copies plain files to your own Drive, and the app can only see the
+  files it put there itself.
+
+More detail: [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md) (the backend and what
+is sent to it), [docs/DRIVE_BACKUP.md](docs/DRIVE_BACKUP.md) (the backup),
+[docs/MEDIA_PIPELINE.md](docs/MEDIA_PIPELINE.md) (recording, trimming and stitching),
+and [JOURNAL_DESIGN.md](JOURNAL_DESIGN.md) (the design the journal was built from).
+
+## The screens
 
 Three tabs at the bottom: **Days**, **Recaps**, **Reel**.
 
@@ -46,16 +141,15 @@ Recaps (one page per year, swipe between years)
 Reel
   ├─ range ── text on each second (date, caption, place, style)
   ├─ Google Drive backup (a folder per month)  ◀── Restore
-  └─ Make my reel ──▶ saved to Movies/1day1sec
+  └─ Make my reel ──▶ saved to Movies/Kilasan
 ```
 
-Recording runs up to 5 seconds, then the trim screen picks which 1-second
-window to keep. The kept second is re-encoded to a fixed profile and stored in
-app-private `filesDir/clips/<date>.mp4`, with a Room row keyed by date. Journal
-media (voice notes, photos, pen pages) lives in `filesDir/journal/`, and deleted
-seconds wait in `filesDir/trash/`.
+## In the code
 
-## Layout
+On the phone, a second is `filesDir/clips/<date>.mp4` with a Room row keyed by date.
+Journal media (voice notes, photos, pen pages) lives in `filesDir/journal/`, and
+deleted seconds wait in `filesDir/trash/`.
+
 
 | Path | What lives there |
 | --- | --- |
@@ -82,13 +176,10 @@ Architecture is MVVM with a hand-rolled `AppContainer` for dependencies. No DI
 framework — the graph is a couple of dozen objects.
 
 See [docs/MEDIA_PIPELINE.md](docs/MEDIA_PIPELINE.md) for why Media3 Transformer
-rather than FFmpeg, and why clips are normalised on the way in.
-See [docs/DRIVE_BACKUP.md](docs/DRIVE_BACKUP.md) for how the Drive backup works
-and the one-time Google Cloud setup it needs before it will sign in.
-See [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md) for the AI backend the
-journal talks to; its code is in [backend/](backend/README.md).
+rather than FFmpeg, and why clips are normalised on the way in. Building the app
+from source is covered in [docs/BUILDING.md](docs/BUILDING.md).
 
-## Behaviour worth knowing
+## Behaviour in detail
 
 ### The second
 
@@ -179,7 +270,7 @@ journal talks to; its code is in [backend/](backend/README.md).
   against your entries on the phone, so it is never something you did not write.
   See [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md).
 - **Year in pixels.** One column per month, one row per day, each cell the colour of
-  that day's mood. "Download PNG" saves a 1080 × 1920 picture to Pictures/1day1sec.
+  that day's mood. "Download PNG" saves a 1080 × 1920 picture to Pictures/Kilasan.
 - **Messages.** "Today's second is saved." and its like stay for at least ten
   seconds, wait while they are being touched or have keyboard focus, can be closed
   by hand, and are announced politely by screen readers without taking focus.
@@ -187,7 +278,7 @@ journal talks to; its code is in [backend/](backend/README.md).
 ### The reel and the backup
 
 - **One button.** "Make my reel" stitches the chosen range and saves the result to
-  Movies/1day1sec in one go; the finished reel can be played on the Reel tab.
+  Movies/Kilasan in one go; the finished reel can be played on the Reel tab.
 - **Text on each second.** Date, caption and place can each be switched on or off.
   The text is drawn when the reel is built; the stored clips themselves are never
   modified, so the switches can be flipped and the reel made again at any time.
@@ -201,7 +292,7 @@ journal talks to; its code is in [backend/](backend/README.md).
 - **Drive backup is opt-in and manual.** Nothing is uploaded until you tap
   "Back up now". Clips go up as ordinary `.mp4` files, unencrypted, so anyone with
   access to your Google account can watch them. They are filed one folder per
-  month: `1day1sec/2026-11/2026-11-07.mp4`. Each day's journal goes beside its
+  month: `Kilasan/2026-11/2026-11-07.mp4`. Each day's journal goes beside its
   clip: a small JSON file with the mood, place and entries, and the entries' voice
   notes, photos and pen pages; recaps are saved too. It only ever sees files it
   created (`drive.file` scope). A dropped connection is retried automatically, the
@@ -222,20 +313,18 @@ journal talks to; its code is in [backend/](backend/README.md).
   Android; custom font files are not bundled.
 - Making a reel runs in the ViewModel scope, so backgrounding the app during a long
   stitch cancels it. A foreground service is the fix if reels get long.
-- The journal work (everything in [JOURNAL_DESIGN.md](JOURNAL_DESIGN.md)) compiles,
-  builds a debug APK and passes the unit tests, but at the time of writing has not
-  been run on a phone or emulator. Layout, the camera and microphone paths, the
-  photo picker, location, and the version 2 to 3 database migration on a real
-  install are the things to check first. (The migration's SQL was compared,
-  statement by statement, with the schema Room generates.)
+- The journal work (everything in [JOURNAL_DESIGN.md](JOURNAL_DESIGN.md)) has been
+  run on one phone only. There, voice notes and pages are typed out through the
+  deployed backend. A letter written from the app, and a restore onto a second
+  phone, have not been tried yet.
 - Typing out and recaps need the AI backend (`backend/`) deployed and its address
   set in `local.properties`; without that nothing is typed out and no recap is
   written. See [docs/JOURNAL_BACKEND.md](docs/JOURNAL_BACKEND.md).
 - Light theme only. The app ignores the phone's dark mode.
 - Deleting an entry (writing, voice note, photo) is confirmed first but cannot be
   undone; only seconds go through Recently deleted.
-- The screens from the design canvas are meant to be exported into `docs/design/`;
-  that folder has not been added.
+- Six screens from the design canvas are in `docs/screenshots/`, as two pictures. The
+  rest (camera, trim, month and year letters, the dialogs) have not been exported.
 - A recap is written once. Entries added to a week after its letter was written are
   not reflected, and there is no "write it again".
 - Tests run on a plain JVM and cover logic that does not need the phone: how

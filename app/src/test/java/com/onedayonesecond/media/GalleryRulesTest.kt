@@ -46,7 +46,10 @@ class GalleryRulesTest {
 
     @Test
     fun `reels exported by this app are not source material`() {
+        assertFalse(GalleryRules.isCandidate("kilasan-20261107.mp4", 12_000, 20_000_000))
+        // Reels exported while the app was called 1day1sec are still its own output.
         assertFalse(GalleryRules.isCandidate("1day1sec-20261107.mp4", 12_000, 20_000_000))
+        assertTrue(GalleryRules.isCandidate("kilasan.mp4", 12_000, 20_000_000))
     }
 
     @Test

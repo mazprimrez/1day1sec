@@ -130,7 +130,7 @@ fun AddSheet(
             openCamera()
         } else {
             container.messages.show(
-                "The camera isn't allowed for 1day1sec. Allow it in your phone's Settings, under Apps, " +
+                "The camera isn't allowed for Kilasan. Allow it in your phone's Settings, under Apps, " +
                     "or choose from your photos.",
             )
         }

@@ -111,7 +111,7 @@ class PixelsViewModel(
         container.appScope.launch {
             try {
                 container.pixelsExporter.export(current.year, current.moods, LocalDate.now())
-                container.messages.show("${current.year} in pixels is saved to Pictures/1day1sec.")
+                container.messages.show("${current.year} in pixels is saved to Pictures/Kilasan.")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -98,7 +98,7 @@ class DriveBackup(
         if (nothingLocal && movedAway.isEmpty()) return@withContext Summary(0, 0, 0)
 
         val api = DriveApi(accessToken)
-        val rootId = api.findFolder(DriveLayout.ROOT_FOLDER) ?: if (nothingLocal) {
+        val rootId = findRoot(api) ?: if (nothingLocal) {
             // Nothing was ever uploaded, so there is nothing to clean up either.
             pendingRemovals.remove(movedAway)
             return@withContext Summary(0, 0, 0)
@@ -238,6 +238,10 @@ class DriveBackup(
      * the day's file that refers to them, so the file never points at media that is
      * not there yet.
      */
+    /** The backup's folder, renamed first if it still has the app's former name. */
+    private fun findRoot(api: DriveApi): String? =
+        DriveLayout.findRoot(find = { api.findFolder(it) }, rename = api::rename)
+
     private fun syncDay(
         api: DriveApi,
         folderId: String,
@@ -339,7 +343,7 @@ class DriveBackup(
         onProgress: (done: Int, total: Int) -> Unit,
     ): RestoreSummary = withContext(Dispatchers.IO) {
         val api = DriveApi(accessToken)
-        val rootId = api.findFolder(DriveLayout.ROOT_FOLDER)
+        val rootId = findRoot(api)
             ?: throw NoBackupException("No backup found in this Google account.")
         val rootChildren = api.listChildren(rootId)
 

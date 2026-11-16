@@ -13,12 +13,20 @@ object GalleryRules {
     const val MAX_DURATION_MS = 5 * 60_000L
     const val MAX_BYTES = 1L shl 30
 
-    /** Reels this app exported are named like this; they are output, not source material. */
-    const val OWN_EXPORT_PREFIX = "1day1sec-"
+    /** Reels this app exports are named like this; they are output, not source material. */
+    const val OWN_EXPORT_PREFIX = "kilasan-"
+
+    /** How they were named while the app was called 1day1sec. Those are still its own output. */
+    private const val FORMER_EXPORT_PREFIX = "1day1sec-"
+
+    /** True if [displayName] is a reel this app exported, under its name now or before. */
+    fun isOwnExport(displayName: String?): Boolean =
+        displayName != null &&
+            (displayName.startsWith(OWN_EXPORT_PREFIX, ignoreCase = true) || displayName.startsWith(FORMER_EXPORT_PREFIX))
 
     /** True if a video can go through the import and trim steps. */
     fun isCandidate(displayName: String?, durationMs: Long, sizeBytes: Long): Boolean =
-        displayName?.startsWith(OWN_EXPORT_PREFIX) != true &&
+        !isOwnExport(displayName) &&
             durationMs in VideoSpec.MIN_RECORDING_MS..MAX_DURATION_MS &&
             sizeBytes <= MAX_BYTES
 

@@ -68,4 +68,54 @@ class DriveLayoutTest {
         assertNull(DriveLayout.dateOfEncryptedClip("2026-11-07.mp4"))
         assertNull(DriveLayout.dateOfEncryptedClip("1day1sec.keyinfo"))
     }
+
+    /** A stand-in Drive: top-level folders by name, and a record of what was renamed. */
+    private class FakeDrive(vararg folders: Pair<String, String>, val renameFails: Boolean = false) {
+        val folders = folders.toMap().toMutableMap()
+        val renames = mutableListOf<Pair<String, String>>()
+
+        fun root(): String? = DriveLayout.findRoot(
+            find = { folders[it] },
+            rename = { id, name ->
+                if (renameFails) throw java.io.IOException("Drive is not answering")
+                renames += id to name
+            },
+        )
+    }
+
+    @Test
+    fun `the backup folder is found under the app's name`() {
+        val drive = FakeDrive("Kilasan" to "new-id")
+
+        assertEquals("new-id", drive.root())
+        assertEquals(emptyList<Pair<String, String>>(), drive.renames)
+    }
+
+    @Test
+    fun `a backup made under the former name is renamed, not started again`() {
+        val drive = FakeDrive("1day1sec" to "old-id")
+
+        assertEquals("old-id", drive.root())
+        assertEquals(listOf("old-id" to "Kilasan"), drive.renames)
+    }
+
+    @Test
+    fun `a backup under the former name is still used when it cannot be renamed`() {
+        val drive = FakeDrive("1day1sec" to "old-id", renameFails = true)
+
+        assertEquals("old-id", drive.root())
+    }
+
+    @Test
+    fun `with both folders the one under the app's name is used and the other is left alone`() {
+        val drive = FakeDrive("Kilasan" to "new-id", "1day1sec" to "old-id")
+
+        assertEquals("new-id", drive.root())
+        assertEquals(emptyList<Pair<String, String>>(), drive.renames)
+    }
+
+    @Test
+    fun `a Drive with neither folder has no backup`() {
+        assertNull(FakeDrive().root())
+    }
 }

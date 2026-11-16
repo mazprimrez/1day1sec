@@ -172,7 +172,7 @@ fun ReelScreen(
             }
             reel.exportedName?.let {
                 BodyText(
-                    "Your reel is saved to Movies/1day1sec as $it.",
+                    "Your reel is saved to Movies/Kilasan as $it.",
                     Modifier.padding(horizontal = ScreenPadding).padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
@@ -198,7 +198,7 @@ fun ReelScreen(
                     enabled = reel.clipCount > 0 && !saving,
                 )
             }
-            MetaText("Saves to Movies/1day1sec", Modifier.padding(top = 6.dp).align(Alignment.CenterHorizontally))
+            MetaText("Saves to Movies/Kilasan", Modifier.padding(top = 6.dp).align(Alignment.CenterHorizontally))
         }
     }
 
@@ -273,7 +273,7 @@ private fun DriveBackupSection(drive: BackupUiState, backup: BackupViewModel) {
     Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp)) {
         HeadingText("Google Drive backup")
         MetaText(
-            "Copies your seconds and your journal to a \"1day1sec\" folder in your own Google Drive, " +
+            "Copies your seconds and your journal to a \"Kilasan\" folder in your own Google Drive, " +
                 "one folder for each month. Nothing is sent until you tap Back up now.",
             Modifier.padding(top = 4.dp),
         )

@@ -131,7 +131,7 @@ fun VoiceScreen(date: LocalDate, onDone: () -> Unit, onBack: () -> Unit) {
 
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         micAllowed = granted
-        if (!granted) problem = "The microphone isn't allowed for 1day1sec. Allow it in your phone's Settings, under Apps."
+        if (!granted) problem = "The microphone isn't allowed for Kilasan. Allow it in your phone's Settings, under Apps."
     }
     LaunchedEffect(Unit) { if (!micAllowed) permission.launch(Manifest.permission.RECORD_AUDIO) }
 

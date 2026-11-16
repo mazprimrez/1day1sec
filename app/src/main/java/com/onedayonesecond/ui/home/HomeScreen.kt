@@ -235,7 +235,7 @@ private fun GalleryHint(
         when {
             state.galleryAccess == GalleryAccessLevel.NONE && showDeniedHint -> MetaText(
                 "Gallery access was not allowed. To find videos for past days, allow " +
-                    "Photos and videos for 1day1sec in your phone's Settings, under Apps.",
+                    "Photos and videos for Kilasan in your phone's Settings, under Apps.",
                 color = Palette.Ink,
             )
 
