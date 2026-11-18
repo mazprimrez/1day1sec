@@ -74,7 +74,10 @@ class TypeOutWorker(context: Context, params: WorkerParameters) : CoroutineWorke
     override suspend fun doWork(): Result {
         val container = (applicationContext as OneDayApp).container
         if (!container.entryProcessor.isConfigured) return Result.success()
-        val left = container.entryProcessor.processWaiting()
+        // Voice thoughts logged on books wait in the same queue as the diary's voice notes.
+        val entriesLeft = container.entryProcessor.processWaiting()
+        val thoughtsLeft = container.thoughtProcessor.processWaiting()
+        val left = entriesLeft || thoughtsLeft
         return if (left && runAttemptCount < MAX_ATTEMPTS) Result.retry() else Result.success()
     }
 

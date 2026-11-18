@@ -154,7 +154,7 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
 
     private fun describe(summary: DriveBackup.Summary): String {
         if (summary.nothingToDo) {
-            return "Nothing to back up yet. Record a second or write something first."
+            return "Nothing to back up yet. Record a second, write something or add a book first."
         }
         return buildString {
             append("Done. Seconds: ${summary.uploaded} new")
@@ -168,6 +168,16 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
             }
             if (summary.recaps > 0) {
                 append(" ${summary.recaps} recap${if (summary.recaps == 1) "" else "s"} saved.")
+            }
+            if (summary.books > 0) {
+                append(" ${summary.books} book${if (summary.books == 1) "" else "s"} saved.")
+            } else if (summary.hadBooks) {
+                append(" Your books were already up to date.")
+            }
+            if (summary.booksRemoved > 0) {
+                append(" Took ${summary.booksRemoved} removed book")
+                append(if (summary.booksRemoved == 1) "" else "s")
+                append(" out of Drive.")
             }
             if (summary.tooLarge > 0) {
                 append(" ${summary.tooLarge} file${if (summary.tooLarge == 1) " was" else "s were"}")
@@ -188,7 +198,7 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     private fun describe(summary: DriveBackup.RestoreSummary): String = buildString {
-        val journalBack = summary.journalDays > 0 || summary.recaps > 0
+        val journalBack = summary.journalDays > 0 || summary.recaps > 0 || summary.books > 0
         when {
             summary.restored > 0 ->
                 append("Restored ${summary.restored} second${if (summary.restored == 1) "" else "s"}.")
@@ -201,6 +211,10 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
         if (summary.recaps > 0) {
             if (isNotEmpty()) append(' ')
             append("${summary.recaps} recap${if (summary.recaps == 1) "" else "s"} restored.")
+        }
+        if (summary.books > 0) {
+            if (isNotEmpty()) append(' ')
+            append("${summary.books} book${if (summary.books == 1) "" else "s"} restored.")
         }
         if (summary.restored > 0 && summary.alreadyOnPhone > 0) {
             append(" ${summary.alreadyOnPhone} already on this phone were left as they are.")

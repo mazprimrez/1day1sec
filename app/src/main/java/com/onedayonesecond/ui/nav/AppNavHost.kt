@@ -57,6 +57,12 @@ import com.onedayonesecond.ui.reel.ReelScreen
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.about.AboutScreen
+import com.onedayonesecond.ui.books.AddBookScreen
+import com.onedayonesecond.ui.books.BookScreen
+import com.onedayonesecond.ui.books.BookSummaryScreen
+import com.onedayonesecond.ui.books.BooksScreen
+import com.onedayonesecond.ui.books.ThoughtScreen
 import com.onedayonesecond.ui.theme.MessageAction
 import com.onedayonesecond.ui.theme.MessageBar
 import com.onedayonesecond.ui.theme.Palette
@@ -147,6 +153,21 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
     fun androidx.navigation.NavBackStackEntry.date(): LocalDate =
         LocalDate.ofEpochDay(arguments!!.getLong(Routes.ARG_DATE))
 
+    val bookArg = listOf(navArgument(Routes.ARG_BOOK) { type = NavType.LongType })
+    fun androidx.navigation.NavBackStackEntry.bookId(): Long = arguments!!.getLong(Routes.ARG_BOOK)
+
+    /**
+     * After a thought is saved: show the book it was saved to. If "Log a thought" was
+     * opened from that book's page, this is simply going back to it.
+     */
+    fun showBook(bookId: Long) {
+        nav.popBackStack()
+        val under = nav.currentBackStackEntry
+        val alreadyThere = under?.destination?.route == Routes.BOOK_PATTERN &&
+            under.arguments?.getLong(Routes.ARG_BOOK) == bookId
+        if (!alreadyThere) nav.navigate(Routes.book(bookId))
+    }
+
     /** After something is added to a day: show that day, with the calendar one step behind it. */
     fun showDay(date: LocalDate) {
         nav.popBackStack(Routes.DAYS, inclusive = false)
@@ -171,7 +192,58 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    screen(Routes.REEL, padding) { ReelScreen() }
+    screen(Routes.BOOKS, padding) {
+        BooksScreen(
+            onAdd = { nav.navigate(Routes.ADD_BOOK) },
+            onOpenBook = { nav.navigate(Routes.book(it)) },
+            onLogThought = { nav.navigate(Routes.thought(it)) },
+        )
+    }
+
+    screen(Routes.ADD_BOOK, padding) {
+        AddBookScreen(
+            onBack = { nav.popBackStack() },
+            // Back on the shelf, where the new book now is and the "added" message is shown.
+            onAdded = { nav.popBackStack() },
+            onOpenBook = { bookId ->
+                nav.popBackStack()
+                nav.navigate(Routes.book(bookId))
+            },
+        )
+    }
+
+    screen(Routes.BOOK_PATTERN, padding, bookArg) { entry ->
+        val bookId = entry.bookId()
+        BookScreen(
+            bookId = bookId,
+            onBack = { nav.popBackStack() },
+            onAddThought = { nav.navigate(Routes.thought(bookId)) },
+            onSummary = { nav.navigate(Routes.bookSummary(bookId)) },
+        )
+    }
+
+    screen(Routes.THOUGHT_PATTERN, padding, bookArg) { entry ->
+        ThoughtScreen(
+            initialBookId = entry.bookId(),
+            onSaved = ::showBook,
+            onClose = { nav.popBackStack() },
+        )
+    }
+
+    screen(Routes.BOOK_SUMMARY_PATTERN, padding, bookArg) { entry ->
+        val bookId = entry.bookId()
+        BookSummaryScreen(
+            bookId = bookId,
+            onBack = { nav.popBackStack() },
+            onAddThought = { nav.navigate(Routes.thought(bookId)) },
+            // The review is a diary entry like any other: it opens in today's write screen.
+            onStartReview = { nav.navigate(Routes.write(LocalDate.now())) },
+        )
+    }
+
+    screen(Routes.REEL, padding) { ReelScreen(onAbout = { nav.navigate(Routes.ABOUT) }) }
+
+    screen(Routes.ABOUT, padding) { AboutScreen(onBack = { nav.popBackStack() }) }
 
     screen(Routes.DELETED, padding) {
         RecentlyDeletedScreen(onBack = { nav.popBackStack() })
@@ -186,6 +258,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
             onVoice = { nav.navigate(Routes.voice(it)) },
             onDraw = { nav.navigate(Routes.pen(it)) },
             onMoved = ::showDay,
+            onOpenBook = { nav.navigate(Routes.book(it)) },
         )
     }
 
@@ -231,11 +304,14 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
             defaultValue = Routes.NO_ENTRY
         },
     ) { entry ->
+        val container = (LocalContext.current.applicationContext as OneDayApp).container
         WriteScreen(
             date = entry.date(),
             entryId = entry.arguments!!.getLong(Routes.ARG_ENTRY),
             onDone = { showDay(entry.date()) },
             onBack = { nav.popBackStack() },
+            // Set by "Start my review" on a book's summary; taken once, by the screen it opens.
+            seed = remember { container.takeWriteSeed().orEmpty() },
         )
     }
 
@@ -280,6 +356,7 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 private val Tabs = listOf(
     Tab(Routes.DAYS, "Days", LineIcons.Days),
     Tab(Routes.RECAPS, "Recaps", LineIcons.Recaps),
+    Tab(Routes.BOOKS, "Books", LineIcons.Books),
     Tab(Routes.REEL, "Reel", LineIcons.Reel),
 )
 

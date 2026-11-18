@@ -84,6 +84,27 @@ object LineIcons {
         moveTo(4.5f, 7.5f); lineTo(12f, 13.5f); lineTo(19.5f, 7.5f)
     }
 
+    /** Books tab: an open book. */
+    val Books = icon("Books") {
+        moveTo(12f, 6.5f); curveTo(10f, 5f, 6.5f, 4.8f, 4f, 5.5f)
+        lineTo(4f, 17.5f); curveTo(6.5f, 16.8f, 10f, 17f, 12f, 18.5f)
+        moveTo(12f, 6.5f); curveTo(14f, 5f, 17.5f, 4.8f, 20f, 5.5f)
+        lineTo(20f, 17.5f); curveTo(17.5f, 16.8f, 14f, 17f, 12f, 18.5f)
+        moveTo(12f, 6.5f); lineTo(12f, 18.5f)
+    }
+
+    /** The barcode on a book's back cover. */
+    val Barcode = icon("Barcode") {
+        moveTo(4.5f, 6f); lineTo(4.5f, 18f)
+        moveTo(7.5f, 6f); lineTo(7.5f, 18f)
+        moveTo(10f, 6f); lineTo(10f, 15.5f)
+        moveTo(13.5f, 6f); lineTo(13.5f, 15.5f)
+        moveTo(16f, 6f); lineTo(16f, 18f)
+        moveTo(19.5f, 6f); lineTo(19.5f, 18f)
+    }
+    val Minus = icon("Minus") { moveTo(5f, 12f); lineTo(19f, 12f) }
+    val Check = icon("Check", width = 2f) { moveTo(5.5f, 12.5f); lineTo(10f, 17f); lineTo(18.5f, 7.5f) }
+
     /** Reel tab: a frame with a play triangle. */
     val Reel = icon("Reel") {
         roundRect(4f, 4f, 20f, 20f, 3.5f)

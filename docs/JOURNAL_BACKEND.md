@@ -1,7 +1,8 @@
 # The journal's AI backend
 
-Three things in the journal need an AI model: writing out voice notes, typing out
-notebook photos and pen pages, and writing the weekly, monthly and yearly recaps.
+Four things in the journal need an AI model: writing out voice notes, typing out
+notebook photos and pen pages, writing the weekly, monthly and yearly recaps, and
+writing a book's summary and review ideas from the thoughts logged while reading it.
 The design names the model (Gemini Flash-Lite) and says it is reached **through a
 backend**, so nothing that can reach the model ships inside the app.
 
@@ -12,7 +13,7 @@ so in plain words (see "Without a backend") and everything else works.
 
 ## The model
 
-All three endpoints use one model, named by one setting on the backend: the
+All four endpoints use one model, named by one setting on the backend: the
 environment variable `GEMINI_MODEL`, which defaults to `gemini-3.5-flash-lite`.
 Moving to a newer model is changing that value; the command is in the backend's
 README.
@@ -61,7 +62,7 @@ changing one line in `AppContainer`.
 
 ## The contract
 
-All three are `POST`. A reply outside 200–299 is an error; its body may be
+All four are `POST`. A reply outside 200–299 is an error; its body may be
 `{"error": "…"}`. The backend also answers each path without the `/v1` prefix.
 
 The app treats 408, 429 and 5xx as "try again later" (the entry waits and is retried
@@ -70,14 +71,14 @@ The backend chooses its statuses with that in mind:
 
 | Status | When |
 | --- | --- |
-| 400 | An empty request, or a recap request that is not a period with days |
+| 400 | An empty request, a recap request that is not a period with days, or a book summary request with fewer than three thoughts |
 | 401, 403 | No Google token the backend accepts, or a token for another account |
-| 413 | Over 10 MB of audio or image, or 2 MB of recap request |
+| 413 | Over 10 MB of audio or image, or 2 MB of recap or book summary request |
 | 415 | Not audio for `/transcribe`; not JPEG or PNG for `/extract-text` |
 | 422 | The model could not read this file, or declined to |
 | 429 | The model is busy |
 | 500 | The model name or the service account's access is wrong. Retried by the app, so entries recover once the setting is fixed |
-| 502 | The model's answer could not be used (cut short, not the agreed shape, a recap with no title or note) |
+| 502 | The model's answer could not be used (cut short, not the agreed shape, a recap with no title or note, a book summary with no title, summary or points) |
 | 503 | The model could not be reached |
 
 ### `POST /v1/transcribe`
@@ -177,6 +178,78 @@ The backend holds the model to that JSON shape, cuts the suggestions to two, and
 checks the quote: if the words are not in the entries it sends an empty `quote` and
 `quoteDate`, and if they are in another day's entries it corrects the date.
 
+### `POST /v1/book-recap`
+
+The "Summary and review ideas" page of a book. Body, `application/json`:
+
+```json
+{
+  "language": "en-ID",
+  "book": {
+    "title": "Rumah di Ujung Musim",
+    "author": "Sekar Wulandari",
+    "totalPages": 379,
+    "currentPage": 215,
+    "status": "READING"
+  },
+  "thoughts": [
+    {"page": 214, "date": "2026-11-14", "text": "I think this book is less about leaving than about who stays."}
+  ],
+  "otherBooks": [{"title": "Pulang ke Timur", "author": "Raka Mahendra"}]
+}
+```
+
+- `thoughts` are the reader's own notes, lowest page first: what they wrote, or the
+  transcript of a voice note. A photo of a page is never sent and never typed out, so
+  the book's own text does not reach the model.
+- At least **three** thoughts with words and a page. Fewer is a 400, and the model is
+  not asked.
+- `otherBooks` are the other books finished this year; may be empty. `author` and
+  `totalPages` may be `null`. `status` is `READING` or `FINISHED`.
+
+Reply:
+
+```json
+{
+  "title": "Pembaca yang awalnya ragu lalu pelan-pelan jatuh hati",
+  "quote": "I think this book is less about leaving than about who stays.",
+  "quotePage": 214,
+  "summary": "One short paragraph on how the reader's thoughts changed.",
+  "points": [
+    {"title": "Siapa yang tinggal", "line": "One line on what they noticed.", "pages": [214], "fromNotes": true},
+    {"title": "Dibanding Pulang ke Timur", "line": "One line.", "pages": [], "fromNotes": false}
+  ],
+  "gap": "Who would you recommend it to?"
+}
+```
+
+`title`, `summary` and at least one point are required; without them the answer is a
+502, which the app retries. `quote` may be empty, and then `quotePage` is `null`.
+
+### The book summary prompt
+
+[`backend/prompts/book_recap.md`](../backend/prompts/book_recap.md). Two rules come
+before everything else in it: **never quote the book**, and **never write the review**.
+The model points at what the reader noticed; the writing is theirs. It asks for a
+one-line title on how they read the book, their strongest line word for word, a short
+paragraph on how their thoughts changed, four or five points with the pages they come
+from, and one thing the notes do not cover yet.
+
+The backend does not leave those rules to the prompt alone:
+
+- **The quote is the reader's.** Words that are not in the thoughts are dropped, the
+  quote comes back in the reader's own spelling, and the page is corrected to the
+  thought it is really from.
+- **Never the book.** A thought sometimes copies out a line of the book. Three or more
+  words inside quotation marks are taken to be such a line, and a quote that is one, or
+  runs into one, is dropped. A single word or two in quotation marks is the reader's
+  own emphasis and is left alone.
+- **Never the review.** A point is a title and one line: line breaks are removed and
+  the line is cut at 220 characters. The summary is cut at 900. At most five points.
+- **Points say where they come from.** Pages that have no thought are removed. A point
+  left with no pages, or one the model marked as its own suggestion, comes back with
+  `fromNotes: false` and no pages, and the app shows it unticked.
+
 ## What the app checks for itself
 
 - **The quote.** The model is asked for the user's own words, but models paraphrase.
@@ -188,6 +261,34 @@ checks the quote: if the words are not in the entries it sends an empty `quote` 
 - **Suggestions** are cut to two.
 - **Enough to write from.** No request is sent for a period with fewer than three
   days that have an entry.
+
+For a book's summary the phone does the same checks the backend does, and does not
+take the backend's word for them (`books/BookSummaryContent.kt`, `BookSummaryTest`):
+
+- **Only the reader's words are sent.** Thoughts with words go, lowest page first.
+  A photo of a page is never sent, so the book's own text does not leave the phone.
+- **The quote is the reader's, or there is none.** The quote must be found in one
+  of the thoughts. It is shown as the reader spelled it, with the page it is really
+  on. Three or more words inside quotation marks in a thought are taken to be a
+  line copied out of the book, and a quote that touches one is not used. If the
+  model's quote cannot be used, the phone takes a sentence of the reader's own; if
+  there is none, the page has no quote.
+- **Points name only pages that have notes.** A point left with no such page is
+  shown as "A suggestion, not from your notes" and starts unticked. At most five.
+- **Enough to write from.** No request is sent for a book with fewer than three
+  thoughts that have words.
+
+## When book summaries are written
+
+Opening "Summary and review ideas" writes the summary if there is none, or if the
+number of thoughts with words has changed since it was written (a thought added, or
+one deleted that it may be quoting). Otherwise the kept one in `book_summaries` is
+shown and nothing is sent. Ticking and unticking points is saved with it. If the
+phone is offline, a job waits for a connection and writes it then.
+
+"Start my review" does not ask the model for anything. It opens today's write screen
+with the book's name and the ticked points' titles as starting lines, and what is
+written is saved as an ordinary diary entry.
 
 ## When recaps are written
 
@@ -214,14 +315,16 @@ With `journal.backend.url` empty, which is the default:
   The words can be typed by hand from the entry's options.
 - Recap pages show the days, moods and "Play this week", and say that letters cannot
   be written yet.
+- A book's "Summary and review ideas" page says summaries are not set up in this
+  build. Books, thoughts and search do not need the backend.
 - No request of any kind is made.
 
 ## Privacy
 
 Everything else in the journal stays on the phone (and in the user's own Drive, if
-they back up). These three calls are the exception: voice notes, photos the user
-marks as notebook pages, pen pages, and the text of entries for a recap are sent to
-the backend, and from there to the model (Gemini on Vertex AI, in the Google Cloud
+they back up). These four calls are the exception: voice notes, photos the user
+marks as notebook pages, pen pages, the text of entries for a recap, and the thoughts
+logged on a book for its summary are sent to the backend, and from there to the model (Gemini on Vertex AI, in the Google Cloud
 project the backend is deployed to). The backend keeps nothing: it does not store or
 log what it is sent, only that a request came and how it ended. Ordinary photos are
 never sent. The "It's a notebook page" switch says so where the choice is made.

@@ -1,5 +1,8 @@
 package com.onedayonesecond.backup
 
+import com.onedayonesecond.data.Book
+import com.onedayonesecond.data.BookRepository
+import com.onedayonesecond.data.BookThought
 import com.onedayonesecond.data.ClipEntity
 import com.onedayonesecond.data.DayMeta
 import com.onedayonesecond.data.Entry
@@ -7,7 +10,9 @@ import com.onedayonesecond.data.ProcessingState
 import com.onedayonesecond.data.Recap
 import com.onedayonesecond.data.ClipRepository
 import com.onedayonesecond.data.JournalRepository
+import com.onedayonesecond.data.PendingBookRemovals
 import com.onedayonesecond.data.PendingDriveRemovals
+import com.onedayonesecond.data.ThoughtType
 import com.onedayonesecond.media.VideoMetadata
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -20,8 +25,8 @@ import java.time.YearMonth
 /**
  * Backs every clip up to the user's Drive as an ordinary `.mp4`, one folder per
  * month (see [DriveLayout]), with each day's journal (mood, place, entries and their
- * voice notes, photos and pen pages) beside it and the recaps alongside, and restores
- * them.
+ * voice notes, photos and pen pages) beside it, the recaps alongside and the books
+ * (each with its cover and its thoughts) in a folder of their own, and restores them.
  *
  * There is no local record of what was uploaded. Each run asks Drive what is
  * already there and compares checksums, so a run can be repeated safely and an
@@ -31,6 +36,8 @@ class DriveBackup(
     private val repository: ClipRepository,
     private val pendingRemovals: PendingDriveRemovals,
     private val journal: JournalRepository,
+    private val books: BookRepository,
+    private val pendingBookRemovals: PendingBookRemovals,
 ) {
 
     /**
@@ -39,8 +46,10 @@ class DriveBackup(
      * and whose now-outdated copy was removed from Drive; [captionsUpdated] is true if
      * the captions file in Drive was written because a caption had changed.
      * [journalDays] counts days whose journal file or media went up; [recaps] counts
-     * recaps that went up; [tooLarge] counts journal files left out because they are
-     * over Drive's single-request size.
+     * recaps that went up; [tooLarge] counts journal and book files left out because
+     * they are over Drive's single-request size. [books] counts books whose file, cover
+     * or thought media went up; [booksRemoved] counts books removed on the phone whose
+     * files were taken out of Drive.
      */
     data class Summary(
         val uploaded: Int,
@@ -52,21 +61,29 @@ class DriveBackup(
         val journalDays: Int = 0,
         val recaps: Int = 0,
         val tooLarge: Int = 0,
+        val books: Int = 0,
+        val booksRemoved: Int = 0,
     ) {
         val total: Int get() = uploaded + replaced + alreadyBackedUp
 
         /** True if the phone had nothing at all to back up. */
         val nothingToDo: Boolean
-            get() = total == 0 && removedFromDrive == 0 && journalDays == 0 && recaps == 0 && !hadJournal
+            get() = total == 0 && removedFromDrive == 0 && journalDays == 0 && recaps == 0 && !hadJournal &&
+                books == 0 && booksRemoved == 0 && !hadBooks
 
         /** Set when there was a journal to look at, even if all of it was already in Drive. */
         var hadJournal: Boolean = false
+            internal set
+
+        /** Set when there were books to look at, even if all of them were already in Drive. */
+        var hadBooks: Boolean = false
             internal set
     }
 
     /**
      * [onlyEncrypted] counts days present only as old encrypted copies, which cannot be
-     * opened. [journalDays] and [recaps] count journal days and recaps brought back.
+     * opened. [journalDays], [recaps] and [books] count journal days, recaps and books
+     * brought back.
      */
     data class RestoreSummary(
         val restored: Int,
@@ -75,6 +92,7 @@ class DriveBackup(
         val onlyEncrypted: Int,
         val journalDays: Int = 0,
         val recaps: Int = 0,
+        val books: Int = 0,
     )
 
     /** Raised when there is nothing in Drive to restore from. */
@@ -82,9 +100,10 @@ class DriveBackup(
 
     suspend fun clipCount(): Int = localClips().size
 
-    /** True if there is a second, a journal day or a recap on this phone to back up. */
+    /** True if there is a second, a journal day, a recap or a book on this phone to back up. */
     suspend fun hasAnything(): Boolean =
-        localClips().isNotEmpty() || localJournal().isNotEmpty() || journal.allRecaps().isNotEmpty()
+        localClips().isNotEmpty() || localJournal().isNotEmpty() || journal.allRecaps().isNotEmpty() ||
+            books.allBooks().isNotEmpty()
 
     suspend fun backup(
         accessToken: String,
@@ -94,13 +113,16 @@ class DriveBackup(
         val movedAway = pendingRemovals.all()
         val journalDays = localJournal()
         val recaps = journal.allRecaps()
-        val nothingLocal = clips.isEmpty() && journalDays.isEmpty() && recaps.isEmpty()
-        if (nothingLocal && movedAway.isEmpty()) return@withContext Summary(0, 0, 0)
+        val shelf = localBooks()
+        val removedBooks = pendingBookRemovals.all()
+        val nothingLocal = clips.isEmpty() && journalDays.isEmpty() && recaps.isEmpty() && shelf.isEmpty()
+        if (nothingLocal && movedAway.isEmpty() && removedBooks.isEmpty()) return@withContext Summary(0, 0, 0)
 
         val api = DriveApi(accessToken)
         val rootId = findRoot(api) ?: if (nothingLocal) {
             // Nothing was ever uploaded, so there is nothing to clean up either.
             pendingRemovals.remove(movedAway)
+            pendingBookRemovals.remove(removedBooks)
             return@withContext Summary(0, 0, 0)
         } else {
             api.createFolder(DriveLayout.ROOT_FOLDER)
@@ -123,8 +145,8 @@ class DriveBackup(
         var replaced = 0
         var skipped = 0
         var moved = 0
-        // Journal days are counted along with the clips, so the progress bar covers the whole run.
-        val steps = clips.size + journalDays.size
+        // Journal days and books are counted along with the clips, so the progress bar covers the whole run.
+        val steps = clips.size + journalDays.size + shelf.size
         onProgress(0, steps)
 
         clips.forEachIndexed { index, clip ->
@@ -224,11 +246,126 @@ class DriveBackup(
             }
         }
 
+        // The books: each one's cover and thought media, then the file that refers to them.
+        var booksUploaded = 0
+        var booksRemoved = 0
+        var booksFolderId = rootChildren.firstOrNull { it.isFolder && it.name == DriveLayout.BOOKS_FOLDER }?.id
+        if (booksFolderId == null && shelf.isNotEmpty()) {
+            booksFolderId = api.createFolder(DriveLayout.BOOKS_FOLDER, rootId)
+        }
+        if (booksFolderId != null) {
+            val inBooks = api.listChildren(booksFolderId).filter { !it.isFolder }
+            shelf.forEachIndexed { index, book ->
+                ensureActive()
+                val result = syncBook(api, booksFolderId, inBooks, book)
+                if (result.changed) booksUploaded++
+                tooLarge += result.tooLarge
+                onProgress(clips.size + journalDays.size + index + 1, steps)
+            }
+
+            // Books removed on the phone: a restore would otherwise bring them back.
+            val onShelf = shelf.mapTo(HashSet()) { it.book.backupKey }
+            for (key in removedBooks.sorted()) {
+                ensureActive()
+                // Still here after all (the app stopped half-way through removing it): its files stay.
+                if (key in onShelf) continue
+                val gone = inBooks.filter { DriveLayout.isBookFile(it.name, key) }
+                gone.forEach { api.delete(it.id) }
+                if (gone.isNotEmpty()) booksRemoved++
+            }
+        }
+
         // Cleared only now: if anything above failed, the next backup tries again.
         pendingRemovals.remove(movedAway)
+        pendingBookRemovals.remove(removedBooks)
 
-        Summary(uploaded, replaced, skipped, moved, removed, captionsUpdated, journalUploaded, recapsUploaded, tooLarge)
-            .also { it.hadJournal = journalDays.isNotEmpty() || recaps.isNotEmpty() }
+        Summary(
+            uploaded, replaced, skipped, moved, removed, captionsUpdated, journalUploaded, recapsUploaded, tooLarge,
+            booksUploaded, booksRemoved,
+        ).also {
+            it.hadJournal = journalDays.isNotEmpty() || recaps.isNotEmpty()
+            it.hadBooks = shelf.isNotEmpty()
+        }
+    }
+
+    /**
+     * Makes one book in Drive match the phone: its cover and its thoughts' media first,
+     * then the book's file that refers to them, so the file never points at something
+     * that is not there yet.
+     */
+    private fun syncBook(
+        api: DriveApi,
+        folderId: String,
+        inFolder: List<DriveApi.RemoteFile>,
+        local: LocalBook,
+    ): DayResult {
+        var changed = false
+        var tooLarge = 0
+        val key = local.book.backupKey
+
+        var coverName: String? = null
+        local.book.coverFile?.takeIf { it.exists() }?.let { cover ->
+            if (cover.length() > DriveApi.MAX_SIMPLE_UPLOAD_BYTES) {
+                tooLarge++
+            } else {
+                // The phone keeps each new cover under a new name; Drive keeps one, under the book's key.
+                val name = DriveLayout.bookCoverName(key)
+                if (putIfChanged(api, folderId, inFolder, name, cover.readBytes())) changed = true
+                coverName = name
+            }
+        }
+
+        val backedUp = mutableListOf<ThoughtBackup>()
+        for (thought in local.thoughts) {
+            val words = thought.text?.ifEmpty { null }
+            val file = thought.mediaFile?.takeIf { it.exists() }
+            var media: String? = null
+            if (file != null) {
+                if (file.length() > DriveApi.MAX_SIMPLE_UPLOAD_BYTES) {
+                    // Left out rather than failing the whole backup on one big file.
+                    tooLarge++
+                } else {
+                    val name = DriveLayout.thoughtMediaName(key, thought.createdAt, file.extension)
+                    if (putIfChanged(api, folderId, inFolder, name, file.readBytes())) changed = true
+                    media = name
+                }
+            }
+            // A thought with neither words nor media to show for it has nothing to keep.
+            // One whose media is gone or too large still keeps its words.
+            if (words == null && media == null) continue
+            backedUp += ThoughtBackup(thought.page, thought.createdAt, thought.type, words, media, thought.showInDiary)
+        }
+
+        val book = local.book
+        val backup = BookBackup(
+            key = key,
+            title = book.title,
+            author = book.author,
+            isbn = book.isbn,
+            edition = book.edition,
+            totalPages = book.totalPages,
+            currentPage = book.currentPage,
+            status = book.status,
+            startedOn = book.startedOn,
+            finishedOn = book.finishedOn,
+            cover = coverName,
+            thoughts = backedUp,
+        )
+        val name = DriveLayout.bookFileName(key)
+        val existing = inFolder.filter { it.name == name }
+        val localBytes = BookFile.encode(backup)
+        if (existing.any { it.md5 == md5Hex(localBytes) }) return DayResult(changed, tooLarge)
+
+        // Drive's copy differs. It may hold thoughts this phone does not have, so the
+        // two are merged rather than overwritten. A failed download fails the backup
+        // instead of being read as "nothing there".
+        val remote = existing.firstOrNull()?.let { BookFile.decode(api.download(it.id)) }
+        val merged = BookFile.encode(BookSync.merge(remote, backup))
+        if (existing.any { it.md5 == md5Hex(merged) }) return DayResult(changed, tooLarge)
+
+        api.upload(folderId, name, merged, DriveLayout.mimeOf(name))
+        existing.forEach { api.delete(it.id) }
+        return DayResult(true, tooLarge)
     }
 
     private class DayResult(val changed: Boolean, val tooLarge: Int)
@@ -374,8 +511,15 @@ class DriveBackup(
                 }
             }
 
+        // The books folder: each book's file, with the listing its cover and media are in.
+        val inBooks = rootChildren
+            .firstOrNull { it.isFolder && it.name == DriveLayout.BOOKS_FOLDER }
+            ?.let { folder -> api.listChildren(folder.id).filter { !it.isFolder } }
+            .orEmpty()
+        val bookFiles = inBooks.mapNotNull { file -> DriveLayout.bookKeyOf(file.name)?.let { it to file } }.toMap()
+
         val onlyEncrypted = encryptedDays - sources.keys
-        if (sources.isEmpty() && dayFiles.isEmpty() && recapFiles.isEmpty()) {
+        if (sources.isEmpty() && dayFiles.isEmpty() && recapFiles.isEmpty() && bookFiles.isEmpty()) {
             throw NoBackupException(
                 if (onlyEncrypted.isEmpty()) {
                     "The backup folder in Drive has no clips in it."
@@ -398,7 +542,11 @@ class DriveBackup(
         // at all for it: no mood, no place, no entry. Anything already here is left alone.
         val journalOnPhone = localJournal().mapTo(HashSet()) { it.date }
         val journalDays = dayFiles.keys.filter { it !in journalOnPhone }.sorted()
-        val steps = days.size + journalDays.size
+        // A book comes back only if this phone does not have it, and did not remove it:
+        // one removed here since the last backup is still in Drive, and must stay gone.
+        val removedHere = pendingBookRemovals.all()
+        val missingBooks = bookFiles.keys.filter { it !in removedHere && books.bookByKey(it) == null }.sorted()
+        val steps = days.size + journalDays.size + missingBooks.size
         var restored = 0
         var already = 0
         var unreadable = 0
@@ -440,7 +588,96 @@ class DriveBackup(
             recapsRestored++
         }
 
-        RestoreSummary(restored, already, unreadable, onlyEncrypted.size, journalRestored, recapsRestored)
+        var booksRestored = 0
+        missingBooks.forEachIndexed { index, key ->
+            ensureActive()
+            // A damaged book file is skipped rather than stopping the books after it. The
+            // name is what says which book this is; a file whose contents disagree is not trusted.
+            val book = BookFile.decode(api.download(bookFiles.getValue(key).id))
+            if (book != null && book.key == key) {
+                restoreBook(api, book, inBooks)
+                booksRestored++
+            }
+            onProgress(days.size + journalDays.size + index + 1, steps)
+        }
+
+        RestoreSummary(restored, already, unreadable, onlyEncrypted.size, journalRestored, recapsRestored, booksRestored)
+    }
+
+    /** Brings one book back with its cover and its thoughts, downloading each thought's media. */
+    private suspend fun restoreBook(api: DriveApi, backup: BookBackup, folder: List<DriveApi.RemoteFile>) {
+        val storage = books.storage
+        // Everything is downloaded before anything is recorded. A book counts as "on the
+        // phone" as soon as it is recorded, so a connection that dropped half-way through
+        // would leave the rest of its thoughts unrestorable.
+        var coverScratch: File? = null
+        val downloaded = mutableListOf<Pair<ThoughtBackup, File?>>()
+        try {
+            folder.firstOrNull { it.name == backup.cover }?.let { remote ->
+                coverScratch = storage.newScratchFile("jpg").also { it.writeBytes(api.download(remote.id)) }
+            }
+            for (thought in backup.thoughts) {
+                val remote = thought.media?.let { name -> folder.firstOrNull { it.name == name } }
+                if (remote == null) {
+                    // Its media is not in Drive: its words still come back, if it has any.
+                    if (thought.text != null) downloaded += thought to null
+                    continue
+                }
+                val scratch = storage.newScratchFile(File(remote.name).extension.ifEmpty { "bin" })
+                scratch.writeBytes(api.download(remote.id))
+                downloaded += thought to scratch
+            }
+        } catch (e: Exception) {
+            coverScratch?.delete()
+            downloaded.forEach { it.second?.delete() }
+            throw e
+        }
+
+        val coverPath = coverScratch?.let { scratch ->
+            storage.newCoverFile(backup.key).also { moveInto(scratch, it) }.absolutePath
+        }
+        val book = books.putBook(
+            Book(
+                backupKey = backup.key,
+                title = backup.title,
+                author = backup.author,
+                isbn = backup.isbn,
+                edition = backup.edition,
+                totalPages = backup.totalPages,
+                coverPath = coverPath,
+                currentPage = backup.currentPage,
+                status = backup.status,
+                startedOn = backup.startedOn,
+                finishedOn = backup.finishedOn,
+            ),
+        )
+        for ((thought, scratch) in downloaded) {
+            val path = scratch?.let {
+                storage.newThoughtFile(backup.key, thought.createdAt, it.extension).also { target -> moveInto(it, target) }
+                    .absolutePath
+            }
+            // A voice note that was backed up before its words were typed out picks up where it left off.
+            val waiting = thought.type == ThoughtType.VOICE && thought.text == null && path != null
+            books.putThought(
+                BookThought(
+                    bookId = book.id,
+                    page = thought.page,
+                    createdAt = thought.createdAt,
+                    type = thought.type,
+                    text = thought.text,
+                    mediaPath = path,
+                    showInDiary = thought.showInDiary,
+                    processing = if (waiting) ProcessingState.PENDING else ProcessingState.DONE,
+                ),
+            )
+        }
+    }
+
+    private fun moveInto(scratch: File, target: File) {
+        if (!scratch.renameTo(target)) {
+            scratch.copyTo(target, overwrite = true)
+            scratch.delete()
+        }
     }
 
     /** Brings one day's mood, place and entries back, downloading each entry's media. */
@@ -507,6 +744,13 @@ class DriveBackup(
 
     /** A day's journal on the phone: its mood and place (if any) and its entries. */
     private class LocalDay(val date: LocalDate, val meta: DayMeta?, val entries: List<Entry>)
+
+    /** A book on the phone with its thoughts. */
+    private class LocalBook(val book: Book, val thoughts: List<BookThought>)
+
+    /** Every book on the shelf, in a fixed order. */
+    private suspend fun localBooks(): List<LocalBook> =
+        books.allBooks().sortedBy { it.backupKey }.map { LocalBook(it, books.thoughtsOf(it.id)) }
 
     /** Every day that has a mood, a place or an entry, oldest first. */
     private suspend fun localJournal(): List<LocalDay> {

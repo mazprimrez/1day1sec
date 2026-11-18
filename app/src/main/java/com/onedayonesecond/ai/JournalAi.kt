@@ -9,7 +9,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * The three things the journal asks an AI model to do. The model (Gemini Flash-Lite)
+ * The four things the journal asks an AI model to do. The model (Gemini Flash-Lite)
  * is never called from the phone: requests go to the app's backend, which is the only
  * thing allowed to reach the model. See docs/JOURNAL_BACKEND.md for the contract.
  *
@@ -30,6 +30,9 @@ interface JournalAi {
 
     /** Writes a recap from the days in [request] and returns its JSON. */
     suspend fun writeRecap(request: JSONObject): JSONObject
+
+    /** Writes a book's summary and review ideas from the thoughts in [request] and returns its JSON. */
+    suspend fun writeBookRecap(request: JSONObject): JSONObject
 }
 
 /** The backend answered, but with an error. [retryable] means trying later may work. */
@@ -62,6 +65,9 @@ class BackendJournalAi(baseUrl: String, private val tokens: AccessTokens) : Jour
 
     override suspend fun writeRecap(request: JSONObject): JSONObject =
         post("/v1/recap", "application/json; charset=UTF-8") { request.toString().toByteArray(Charsets.UTF_8) }
+
+    override suspend fun writeBookRecap(request: JSONObject): JSONObject =
+        post("/v1/book-recap", "application/json; charset=UTF-8") { request.toString().toByteArray(Charsets.UTF_8) }
 
     private fun JSONObject.text(): String = optString("text").trim()
 

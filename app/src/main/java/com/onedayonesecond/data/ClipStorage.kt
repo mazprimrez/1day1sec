@@ -27,6 +27,9 @@ class ClipStorage(private val filesDir: File, private val cacheDir: File) {
     private val journalDir: File
         get() = File(filesDir, "journal").apply { mkdirs() }
 
+    private val booksDir: File
+        get() = File(filesDir, "books").apply { mkdirs() }
+
     private val capturesDir: File
         get() = File(cacheDir, "captures").apply { mkdirs() }
 
@@ -58,6 +61,28 @@ class ClipStorage(private val filesDir: File, private val cacheDir: File) {
         var file = File(journalDir, "$date-$createdAt.$extension")
         var n = 1
         while (file.exists()) file = File(journalDir, "$date-$createdAt-${n++}.$extension")
+        return file
+    }
+
+    /**
+     * Permanent home of a book's cover. The time is part of the name so that a changed
+     * cover is a new file, which is how the screens know to show the new one.
+     */
+    fun newCoverFile(bookKey: String, now: Long = System.currentTimeMillis()): File {
+        var file = File(booksDir, "$bookKey.cover-$now.jpg")
+        var n = 1
+        while (file.exists()) file = File(booksDir, "$bookKey.cover-$now-${n++}.jpg")
+        return file
+    }
+
+    /**
+     * Permanent home of a thought's voice note or page photo. Named by its book and
+     * the moment it was made, which is also its name in the Drive backup.
+     */
+    fun newThoughtFile(bookKey: String, createdAt: Long, extension: String): File {
+        var file = File(booksDir, "$bookKey-$createdAt.$extension")
+        var n = 1
+        while (file.exists()) file = File(booksDir, "$bookKey-$createdAt-${n++}.$extension")
         return file
     }
 

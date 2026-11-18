@@ -55,6 +55,7 @@ import com.onedayonesecond.ui.compile.CompileUiState
 import com.onedayonesecond.ui.compile.CompileViewModel
 import com.onedayonesecond.ui.compile.DateStyleDialog
 import com.onedayonesecond.ui.compile.RangeOption
+import com.onedayonesecond.ui.theme.ActionRow
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BodyText
 import com.onedayonesecond.ui.theme.Chip
@@ -75,6 +76,7 @@ import com.onedayonesecond.ui.theme.TitleText
 @UnstableApi
 @Composable
 fun ReelScreen(
+    onAbout: () -> Unit = {},
     compile: CompileViewModel = viewModel(factory = CompileViewModel.Factory),
     backup: BackupViewModel = viewModel(factory = BackupViewModel.Factory),
 ) {
@@ -182,6 +184,9 @@ fun ReelScreen(
 
             Hairline(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp))
             DriveBackupSection(drive, backup)
+
+            Hairline(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp))
+            ActionRow("About Kilasan", onAbout, subtitle = "Where book data comes from")
             Spacer(Modifier.height(16.dp))
         }
 
@@ -334,7 +339,7 @@ private fun DriveBackupSection(drive: BackupUiState, backup: BackupViewModel) {
                 QuietButton("Restore", { backup.start(BackupAction.RESTORE) }, Modifier.weight(1f))
             }
             MetaText(
-                "Restore only adds days that are missing from this phone. Nothing already here is overwritten.",
+                "Restore only adds days and books that are missing from this phone. Nothing already here is overwritten.",
                 Modifier.padding(top = 8.dp),
             )
         }

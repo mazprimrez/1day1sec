@@ -9,8 +9,17 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [ClipEntity::class, DayMeta::class, Entry::class, Recap::class, DeletedClip::class],
-    version = 3,
+    entities = [
+        ClipEntity::class,
+        DayMeta::class,
+        Entry::class,
+        Recap::class,
+        DeletedClip::class,
+        Book::class,
+        BookThought::class,
+        BookSummary::class,
+    ],
+    version = 4,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -21,6 +30,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun journalDao(): JournalDao
 
     abstract fun deletedClipDao(): DeletedClipDao
+
+    abstract fun bookDao(): BookDao
 
     companion object {
         /**
@@ -66,11 +77,23 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Version 4 adds the reading log: books, the thoughts logged on them, and the
+         * summaries written from those thoughts. Only new tables again; nothing that
+         * exists is touched. The statements live in [BookSchema] so a unit test can hold
+         * them against what Room generates (app/schemas/.../4.json).
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                BookSchema.MIGRATION_3_4_SQL.forEach(db::execSQL)
+            }
+        }
+
         fun build(context: Context): AppDatabase =
             Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "onedayonesecond.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build()
     }
 }

@@ -12,12 +12,20 @@ object Routes {
     const val ARG_ENTRY = "entry"
     const val ARG_KEY = "key"
     const val ARG_YEAR = "year"
+    const val ARG_BOOK = "book"
 
-    // The three tabs.
+    // The four tabs.
     const val DAYS = "days"
     const val RECAPS = "recaps"
+    const val BOOKS = "books"
     const val REEL = "reel"
-    val TABS = setOf(DAYS, RECAPS, REEL)
+    val TABS = setOf(DAYS, RECAPS, BOOKS, REEL)
+
+    const val ABOUT = "about"
+    const val ADD_BOOK = "books/add"
+    const val BOOK_PATTERN = "book/{$ARG_BOOK}"
+    const val THOUGHT_PATTERN = "thought/{$ARG_BOOK}"
+    const val BOOK_SUMMARY_PATTERN = "book/{$ARG_BOOK}/summary"
 
     const val DELETED = "deleted"
     const val DAY_PATTERN = "day/{$ARG_DATE}"
@@ -51,6 +59,12 @@ object Routes {
     fun recap(period: RecapPeriod) = "recap/${period.key}"
 
     fun pixels(year: Int) = "pixels/$year"
+
+    fun book(bookId: Long) = "book/$bookId"
+
+    fun thought(bookId: Long) = "thought/$bookId"
+
+    fun bookSummary(bookId: Long) = "book/$bookId/summary"
 
     // Base64url rather than Uri.encode: NavController percent-decodes route
     // segments before matching, so an encoded '/' in a file path would split the

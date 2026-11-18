@@ -50,7 +50,7 @@ import java.io.File
 import java.time.LocalDate
 
 /** Wraps the recorder so the screen only deals in start, finish and discard. */
-private class VoiceRecorder(private val context: Context) {
+class VoiceRecorder(private val context: Context) {
     private var recorder: MediaRecorder? = null
     var file: File? = null
         private set
@@ -252,12 +252,12 @@ fun VoiceScreen(date: LocalDate, onDone: () -> Unit, onBack: () -> Unit) {
     }
 }
 
-private fun formatClock(ms: Long): String {
+fun formatClock(ms: Long): String {
     val seconds = ms / 1000
     return "%d:%02d".format(seconds / 60, seconds % 60)
 }
 
-private const val MIN_VOICE_MS = 1_000L
+const val MIN_VOICE_MS = 1_000L
 
 // At 64 kbit/s five minutes is about 2.4 MB, inside Drive's 5 MB single-request upload.
-private const val MAX_VOICE_MS = 5 * 60_000L
+const val MAX_VOICE_MS = 5 * 60_000L

@@ -4,7 +4,12 @@ import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.backup.DriveAuth
 import com.onedayonesecond.backup.DriveBackup
+import com.onedayonesecond.books.BookActions
+import com.onedayonesecond.books.BookLookup
+import com.onedayonesecond.books.BookSummaryGenerator
+import com.onedayonesecond.books.ThoughtProcessor
 import com.onedayonesecond.data.AppDatabase
+import com.onedayonesecond.data.BookRepository
 import com.onedayonesecond.data.ClipRepository
 import com.onedayonesecond.data.ClipStorage
 import com.onedayonesecond.data.DateStyleStore
@@ -13,6 +18,7 @@ import com.onedayonesecond.ai.BackendJournalAi
 import com.onedayonesecond.ai.JournalAi
 import com.onedayonesecond.data.JournalPrefs
 import com.onedayonesecond.data.JournalRepository
+import com.onedayonesecond.data.PendingBookRemovals
 import com.onedayonesecond.data.PendingDriveRemovals
 import com.onedayonesecond.journal.EntryProcessor
 import com.onedayonesecond.journal.JournalActions
@@ -53,6 +59,8 @@ class AppContainer(context: Context) {
     val storage by lazy { ClipStorage(appContext) }
     val repository by lazy { ClipRepository(database.clipDao(), storage, database.deletedClipDao()) }
     val journal by lazy { JournalRepository(database.journalDao(), storage) }
+    val pendingBookRemovals by lazy { PendingBookRemovals(appContext) }
+    val books by lazy { BookRepository(database.bookDao(), storage, pendingBookRemovals) }
     val journalPrefs by lazy { JournalPrefs(appContext) }
     val places by lazy { PlaceFinder(appContext) }
     val backendAuth by lazy { BackendAuth(appContext) }
@@ -60,6 +68,19 @@ class AppContainer(context: Context) {
     val entryProcessor by lazy { EntryProcessor(journal, ai) }
     val journalActions by lazy { JournalActions(appContext, journal, places, entryProcessor, appScope) }
     val recapGenerator by lazy { RecapGenerator(repository, journal, ai, journalPrefs) }
+    val bookLookup by lazy { BookLookup(newScratchFile = storage::newScratchFile) }
+    val thoughtProcessor by lazy { ThoughtProcessor(books, ai) }
+    val bookActions by lazy {
+        BookActions(appContext, books, bookLookup, thoughtProcessor, journalActions::importPhoto, appScope)
+    }
+    val bookSummaries by lazy { BookSummaryGenerator(books, ai) }
+
+    /** Words handed to the write screen to start from: the review draft made from a book's summary. */
+    @Volatile
+    var writeSeed: String? = null
+
+    /** The seed, once: the write screen that takes it is the only one that starts from it. */
+    fun takeWriteSeed(): String? = writeSeed.also { writeSeed = null }
     val pixelsExporter by lazy { PixelsExporter(appContext) }
     val trimmer by lazy { VideoTrimmer(appContext) }
     val compiler by lazy { VideoCompiler(appContext) }
@@ -71,5 +92,5 @@ class AppContainer(context: Context) {
     val clipThumbnails by lazy { ClipThumbnails() }
     val driveAuth by lazy { DriveAuth(appContext) }
     val pendingDriveRemovals by lazy { PendingDriveRemovals(appContext) }
-    val driveBackup by lazy { DriveBackup(repository, pendingDriveRemovals, journal) }
+    val driveBackup by lazy { DriveBackup(repository, pendingDriveRemovals, journal, books, pendingBookRemovals) }
 }

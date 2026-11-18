@@ -27,6 +27,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.onedayonesecond.data.BookThought
+import com.onedayonesecond.data.DiaryThought
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -35,6 +37,8 @@ data class DayUiState(
     val clip: ClipEntity? = null,
     val meta: DayMeta? = null,
     val entries: List<Entry> = emptyList(),
+    /** Thoughts logged on a book this day with "Also show it in today's diary" on. They stay the book's. */
+    val thoughts: List<DiaryThought> = emptyList(),
     /** Videos in the phone's gallery made on this day, offered when the day has no second. */
     val galleryCount: Int = 0,
     /** False when this build has no AI service, so nothing can be typed out. */
@@ -64,13 +68,15 @@ class DayViewModel(
         repository.observeBetween(date, date).map { it.firstOrNull() },
         journal.observeMeta(date),
         journal.observeEntries(date),
+        container.books.observeDiaryThoughts(date),
         galleryCount,
-    ) { clip, meta, entries, gallery ->
+    ) { clip, meta, entries, thoughts, gallery ->
         DayUiState(
             date = date,
             clip = clip,
             meta = meta,
             entries = entries,
+            thoughts = thoughts,
             galleryCount = gallery,
             canTypeOut = container.entryProcessor.isConfigured,
             loaded = true,
@@ -154,6 +160,10 @@ class DayViewModel(
     /** "Try now" on a voice note or page that is waiting for the internet or failed. */
     fun retry(entry: Entry) {
         container.appScope.launch { container.journalActions.retry(entry) }
+    }
+
+    fun retry(thought: BookThought) {
+        container.appScope.launch { container.bookActions.retry(thought) }
     }
 
     /** The seconds of [month], for the dots in the move dialog's calendar. */

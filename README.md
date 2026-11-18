@@ -5,11 +5,14 @@ Indonesian for a glimpse.) You record the day's second, add as much or as little
 you like around it (a few lines, a voice note, a photo, a page from your notebook)
 and note how the day felt. Every week, month and year it writes you a letter about
 what you wrote, and at any time it can stitch your seconds into a single video.
+It also keeps a reading log: the books you are reading, and what you thought on
+which page.
 
-Everything is kept on your phone, and there is no account to make. Two things can
-leave the phone, and both are your choice: a backup to your own Google Drive, and
-the features that need an AI model (typing out voice notes and notebook pages,
-writing the letters).
+Everything is kept on your phone, and there is no account to make. Three things can
+leave the phone, and each is your choice: a backup to your own Google Drive, the
+features that need an AI model (typing out voice notes and notebook pages, writing
+the letters and book summaries), and searching for a book, which sends what you
+typed or the ISBN you scanned to Open Library.
 
 ## What it looks like
 
@@ -65,6 +68,17 @@ backend answers a single Google account.
 - The year in pixels: one cell per day in the colour of its mood, saved as a
   picture.
 
+**Reading**
+
+- Keep a shelf: what you are reading now, with a bookmark and a progress bar, and
+  what you finished this year. Find a book by title, author or ISBN, or scan the
+  barcode on its back cover.
+- Log a thought on a page: a few words, a voice note or a photo of the page. It can
+  also show on that day's diary page, linking back to the book.
+- Once a book has three thoughts, read a summary of how your thoughts went, with
+  points you could build a review from. It quotes you, never the book, and it does
+  not write the review.
+
 **The reel**
 
 - Stitch any range of days into one video, with the date, caption and place drawn
@@ -113,6 +127,11 @@ backend answers a single Google account.
   is signed in with each request, and Google confirms it. The model is named by one
   setting, so moving to a newer one is a one-line change. Without a backend
   configured, nothing is sent and those two features simply say so.
+- **Books.** Search goes straight from the phone to Open Library, which is free and
+  needs no key; covers come from there too. Barcodes are read on
+  the phone. Books and thoughts live in the same database as the journal. A book's
+  summary is written by the backend from your thoughts only, and kept until you
+  add or delete a thought.
 - **The reel** is built on the phone. The text is drawn as the reel is made and the
   stored seconds are never changed, so it can be made again differently at any time.
 - **Backup** copies plain files to your own Drive, and the app can only see the
@@ -125,7 +144,7 @@ and [JOURNAL_DESIGN.md](JOURNAL_DESIGN.md) (the design the journal was built fro
 
 ## The screens
 
-Three tabs at the bottom: **Days**, **Recaps**, **Reel**.
+Four tabs at the bottom: **Days**, **Recaps**, **Books**, **Reel**.
 
 ```
 Days (calendar)
@@ -138,23 +157,33 @@ Days (calendar)
 Recaps (one page per year, swipe between years)
   ├─ the year's letter ── Year in pixels ──▶ Download PNG
   └─ months, opening out into weeks ──▶ Week / Month / Year recap
+Books
+  ├─ + ──▶ Add a book (search / scan the barcode / add by hand) ──▶ "added", Undo
+  ├─ Reading now ──▶ Book page ──⋯──▶ Mark as finished / Edit book / Change cover / Remove book
+  │    │               ├─ your thoughts, by page ──▶ Summary and review ideas ──▶ Start my review
+  │    │               └─ Add a thought ──▶ Log a thought
+  │    └─ "Log a thought" on each row ──▶ Log a thought (that book)
+  └─ Finished this year ──▶ Book page
 Reel
   ├─ range ── text on each second (date, caption, place, style)
   ├─ Google Drive backup (a folder per month)  ◀── Restore
+  ├─ About Kilasan (where book data comes from)
   └─ Make my reel ──▶ saved to Movies/Kilasan
 ```
 
 ## In the code
 
 On the phone, a second is `filesDir/clips/<date>.mp4` with a Room row keyed by date.
-Journal media (voice notes, photos, pen pages) lives in `filesDir/journal/`, and
-deleted seconds wait in `filesDir/trash/`.
+Journal media (voice notes, photos, pen pages) lives in `filesDir/journal/`, book
+covers and thoughts' media in `filesDir/books/`, and deleted seconds wait in
+`filesDir/trash/`.
 
 
 | Path | What lives there |
 | --- | --- |
 | `data/` | Room entities, DAOs, database and migrations, repositories, file paths |
 | `journal/` | Recap periods and rules, recap writing, typing out entries, adding entries |
+| `books/` | Book search (Open Library), ISBNs, adding books and thoughts, the book summary |
 | `ai/` | The client for the AI backend |
 | `location/` | The place line: one location fix per entry, turned into a short name |
 | `media/` | Trim, compile, gallery scan/import/export, Transformer plumbing |
@@ -166,11 +195,13 @@ deleted seconds wait in `filesDir/trash/`.
 | `ui/home/` | Days tab: month calendar; Recently deleted |
 | `ui/day/` | Day page, Add sheet, move dialog, write / voice / pen screens |
 | `ui/recaps/` | Recaps tab, recap page, year in pixels |
+| `ui/books/` | Books tab, Add a book and the barcode scanner, book page, Log a thought, summary |
+| `ui/about/` | About page, with the credit for book data |
 | `ui/reel/` | Reel tab (uses the view models in `ui/compile/` and `ui/backup/`) |
 | `ui/compile/` | Range selection, stitching, export; the text style dialog |
 | `ui/backup/` | Drive backup state |
 | `ui/gallery/` | One day's gallery videos, to pick from |
-| `work/` | Daily reminder; nightly recaps; typing out entries once back online |
+| `work/` | Daily reminder; nightly recaps; typing out entries once back online; covers and book summaries once back online |
 
 Architecture is MVVM with a hand-rolled `AppContainer` for dependencies. No DI
 framework — the graph is a couple of dozen objects.
@@ -275,6 +306,41 @@ from source is covered in [docs/BUILDING.md](docs/BUILDING.md).
   seconds, wait while they are being touched or have keyboard focus, can be closed
   by hand, and are announced politely by screen readers without taking focus.
 
+### Books
+
+- **The shelf.** "Reading now" lists each book with its cover, where the bookmark
+  is, and a "Log a thought" link of its own. "Finished this year" is a grid of
+  covers; earlier years are behind a button. An empty shelf says so and offers
+  "Add a book".
+- **Adding a book.** Search by title, author or ISBN, or scan the barcode on the
+  back cover; only ISBN barcodes are accepted, so a price sticker is ignored. Each
+  result is one edition, with its publisher, year and page count, because progress
+  depends on the right one. Results come from Open Library, with the title you
+  typed first; a page count it gives for
+  all editions of a book is shown as "about 322 pages" and can be corrected under
+  "Edit book". When search finds nothing, has no connection or is not
+  answering, the screen says which and offers adding by hand, with a photo of the
+  cover. A book with an ISBN and no cover gets one once the phone is online; until
+  then, and if none is found, its title is printed on a plain cover.
+- **Thoughts.** A thought belongs to a page. The page field starts on the page
+  after the bookmark. Saving moves the bookmark only forward; it can be moved back
+  under "Edit book". A thought can have a photo of the page or a voice note. A
+  voice note with no typed words is typed out like a diary voice note; typed words
+  are always kept as they are. Closing "Log a thought" keeps what was started, per
+  book. A logged thought's page and words can be corrected from its ⋯ menu on the
+  book page; if a mistyped page had put the bookmark too far on, correcting it
+  brings the bookmark back to the furthest page thought about.
+- **In the diary.** With "Also show it in today's diary" on, the thought appears on
+  that day's page as "21:10, from Laut Bercerita, page 214" and opens the book. It
+  is not copied: it stays the book's, is changed or deleted there, and does not
+  count as a diary entry for recaps.
+- **Summary and review ideas.** Needs three thoughts with words. It is kept until a
+  thought is added or deleted, then written again when next opened. The quote is
+  checked on the phone against your thoughts, and a line you copied out of the book
+  in quotation marks is never shown as your quote. "Start my review" opens today's
+  write screen with the ticked points as starting lines; the review is saved as an
+  ordinary diary entry.
+
 ### The reel and the backup
 
 - **One button.** "Make my reel" stitches the chosen range and saves the result to
@@ -294,10 +360,12 @@ from source is covered in [docs/BUILDING.md](docs/BUILDING.md).
   access to your Google account can watch them. They are filed one folder per
   month: `Kilasan/2026-11/2026-11-07.mp4`. Each day's journal goes beside its
   clip: a small JSON file with the mood, place and entries, and the entries' voice
-  notes, photos and pen pages; recaps are saved too. It only ever sees files it
+  notes, photos and pen pages; recaps are saved too. Books go in `Kilasan/books/`,
+  each with its cover and its thoughts. It only ever sees files it
   created (`drive.file` scope). A dropped connection is retried automatically, the
   screen stays on during a backup, and a run that still fails can simply be tapped
   again: it skips what is already uploaded and carries on.
 - **Restore from Drive** adds days that are in Drive but missing on the phone
   (for a new phone) and never overwrites a day already present. For the journal,
-  "missing" means the phone has no mood, place or entry at all for that day.
+  "missing" means the phone has no mood, place or entry at all for that day. Books
+  that are in Drive and not on the phone come back too.
