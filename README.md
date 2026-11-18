@@ -8,6 +8,10 @@ what you wrote, and at any time it can stitch your seconds into a single video.
 It also keeps a reading log: the books you are reading, and what you thought on
 which page.
 
+Kilasan is made for personal use. It holds the things its author wanted to keep in
+one place, which is why its contents are a bit random: a video diary, moods,
+letters, a year in pixels and a reading log.
+
 Everything is kept on your phone, and there is no account to make. Three things can
 leave the phone, and each is your choice: a backup to your own Google Drive, the
 features that need an AI model (typing out voice notes and notebook pages, writing
@@ -16,12 +20,10 @@ typed or the ISBN you scanned to Open Library.
 
 ## What it looks like
 
-![Three screens of Kilasan. Days: November as a calendar with a tile for each day that has a second, today outlined, and an Add to today button. Add: record today's second, write, voice note, photo, or draw with S Pen. Reel: choose the days, the text on each second and the Google Drive backup, then Make my reel.](docs/screenshots/screens-tabs.png)
-
-![Three more screens, each showing the top of a longer page. A day: the day's second with its mood, caption and place, then the first entries: writing, a voice note and a notebook page. A letter: a title, a quote from the week's entries, each day's mood and what happened. Year in pixels: one square per day of 2026, coloured by mood.](docs/screenshots/screens-pages.png)
+<img src="docs/screenshots/screens.png" width="720" alt="Three screens of Kilasan. Days: November as a sheet of small frames, one for each day, numbered underneath; days with a second show its still and the mood's face, missed days are dashed, today is outlined, and there is an Add today button. A day: the day's second with its mood, caption and place, then what was added around it: writing, a voice note and a notebook page. A letter: the week's recap, with a title, a quote from the week's entries, a frame for each day and what happened.">
 
 These are the screens as designed, with made-up entries, not captures from a phone.
-In the app the pink tiles are frames from your own videos and photos.
+In the app the pink frames are stills from your own videos.
 
 ## What it is for
 
@@ -32,8 +34,8 @@ back in about six minutes.
 Kilasan is for:
 
 - **Keeping a record of ordinary days** without it becoming a chore. The second is
-  the only thing a day needs, and a reminder at 8 pm asks for it only if it is
-  still missing.
+  the only thing a day needs, and a reminder in the evening (8 pm unless you
+  choose another time, or switch it off) asks for it only if it is still missing.
 - **Saying more on the days that have more.** Write, talk, add photos, or
   photograph what you wrote on paper. Talking and handwriting are typed out for
   you, so everything ends up as words you can read back.
@@ -81,8 +83,9 @@ backend answers a single Google account.
 
 **The reel**
 
-- Stitch any range of days into one video, with the date, caption and place drawn
-  on each second, in a font and position you choose. Saved to `Movies/Kilasan`.
+- Stitch this year, the last 30 days or the last week into one video, with the
+  date, caption and place drawn on each second, in a font and position you
+  choose. Saved to `Movies/Kilasan`.
 
 **Keeping it safe**
 
@@ -165,10 +168,17 @@ Books
   │    └─ "Log a thought" on each row ──▶ Log a thought (that book)
   └─ Finished this year ──▶ Book page
 Reel
-  ├─ range ── text on each second (date, caption, place, style)
-  ├─ Google Drive backup (a folder per month)  ◀── Restore
-  ├─ About Kilasan (where book data comes from)
+  ├─ range: Year / 30 days / Week
+  ├─ Text on each second ──▶ its page (date, caption, place, font, position)
+  ├─ Google Drive backup ──▶ its page (a folder per month)  ◀── Restore
   └─ Make my reel ──▶ saved to Movies/Kilasan
+Settings (the gear on every tab)
+  ├─ What letters call you · when letters arrive
+  ├─ Daily reminder (on / off, and at what time)
+  ├─ Text on each second · the range a reel starts with
+  ├─ Tag entries with a place (on / off)
+  ├─ Google Drive backup
+  └─ Recently deleted · About Kilasan (where book data comes from)
 ```
 
 ## In the code
@@ -192,13 +202,14 @@ covers and thoughts' media in `filesDir/books/`, and deleted seconds wait in
 | `ui/trim/` | 1-second window picker with looping preview |
 | `ui/theme/` | Palette, type scale, line icons, mood faces, shared components, the message bar |
 | `ui/nav/` | Routes, the navigation host and the tab bar |
-| `ui/home/` | Days tab: month calendar; Recently deleted |
+| `ui/home/` | Days tab: month calendar; the Recently deleted page |
 | `ui/day/` | Day page, Add sheet, move dialog, write / voice / pen screens |
 | `ui/recaps/` | Recaps tab, recap page, year in pixels |
 | `ui/books/` | Books tab, Add a book and the barcode scanner, book page, Log a thought, summary |
 | `ui/about/` | About page, with the credit for book data |
 | `ui/reel/` | Reel tab (uses the view models in `ui/compile/` and `ui/backup/`) |
-| `ui/compile/` | Range selection, stitching, export; the text style dialog |
+| `ui/settings/` | Settings (the gear on every tab), and the pages for the reel's text and the Drive backup |
+| `ui/compile/` | Range selection, stitching, export; the preview of text on a frame |
 | `ui/backup/` | Drive backup state |
 | `ui/gallery/` | One day's gallery videos, to pick from |
 | `work/` | Daily reminder; nightly recaps; typing out entries once back online; covers and book summaries once back online |
@@ -218,15 +229,16 @@ from source is covered in [docs/BUILDING.md](docs/BUILDING.md).
 - **Nothing is deleted on the spot.** Deleting a second (the ⋯ menu on its day),
   taking a day again, or moving a second onto a day that already has one all send
   the old video to a trash folder. A message offers Undo straight away; after that
-  it is listed under "Recently deleted" on the Days tab, from where it can be put
+  it is listed under "Recently deleted" in Settings, from where it can be put
   back, for 30 days. Only then, or with "Remove for good" there, is the file
   really gone. Writing and photos are never touched by deleting a second.
 - **Backfill works.** Tapping any past day opens its page, which offers to record
   that day's second. Future days are not tappable.
 - **Audio is optional.** Denying microphone permission still records; silence is
   inserted at compile time so the reel stays in sync.
-- **The reminder is conditional.** The worker fires daily at 20:00 local and
-  only notifies if that day has no clip yet.
+- **The reminder is conditional.** The worker fires daily at the time set in
+  Settings (20:00 local unless changed) and only notifies if that day has no clip
+  yet. It can be switched off there.
 - **Move a second to another day.** ⋯ on the day page, then "Move to another day".
   Type the day ("15 Nov 2026", "15/11/2026", or "15 Nov" for the most recent one)
   or pick it from the calendar, where a dot marks days that already have a second.
