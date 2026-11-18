@@ -174,7 +174,7 @@ class TrimViewModel(
     }
 
     companion object {
-        private const val FRAME_COUNT = 8
+        private const val FRAME_COUNT = 10
         private const val FRAME_HEIGHT_PX = 160
 
         val Factory = viewModelFactory {

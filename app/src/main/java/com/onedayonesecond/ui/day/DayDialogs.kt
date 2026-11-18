@@ -13,6 +13,16 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.media3.common.util.UnstableApi
+import com.onedayonesecond.ui.common.ClipStill
+import com.onedayonesecond.ui.theme.TextAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -44,7 +54,6 @@ import com.onedayonesecond.ui.theme.AppDialog
 import com.onedayonesecond.ui.theme.AppSheet
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BodyText
-import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.IconAction
 import com.onedayonesecond.ui.theme.LineIcons
 import com.onedayonesecond.ui.theme.MetaText
@@ -58,9 +67,11 @@ import java.io.File
 import java.time.LocalDate
 
 /**
- * What can be done with a day. Deleting sits apart at the bottom and says what it
- * leaves alone; the sheet's Close button is below everything, within thumb's reach.
+ * What can be done with a day, under a small picture of its frame. Each row says
+ * what it will do before it is tapped; deleting comes last, in the colour of things
+ * that remove, and says what it leaves alone.
  */
+@UnstableApi
 @Composable
 fun DayOptionsSheet(
     date: LocalDate,
@@ -73,21 +84,45 @@ fun DayOptionsSheet(
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val divider = Modifier.padding(horizontal = ScreenPadding)
-    AppSheet(onDismiss = onDismiss, title = RecapLabels.dayAndMonth(date), meta = RecapLabels.fullDate(date)) {
+    AppSheet(onDismiss = onDismiss) {
+        Row(
+            Modifier.padding(horizontal = ScreenPadding).padding(bottom = 12.dp).semantics(mergeDescendants = true) { heading() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (clip != null) {
+                ClipStill(clip, Modifier.size(width = 30.dp, height = 40.dp))
+                Spacer(Modifier.width(12.dp))
+            }
+            Column {
+                Text(RecapLabels.weekdayAndDay(date), style = AppType.Heading, color = Palette.Ink)
+                Text(
+                    "FRAME ${date.dayOfYear}",
+                    style = AppType.FrameNumber,
+                    color = Palette.Muted,
+                    modifier = Modifier.semantics { contentDescription = "Day ${date.dayOfYear} of ${date.year}" },
+                )
+            }
+        }
         if (clip != null) {
-            ActionRow("Replace this second", onReplace, icon = LineIcons.Video)
-            Hairline(divider)
-            ActionRow("Move to another day", onMove, icon = LineIcons.Days)
-            Hairline(divider)
+            ActionRow(
+                "Replace this second",
+                onReplace,
+                subtitle = "The current one stays until you save the new one",
+                icon = LineIcons.Camera,
+            )
+            ActionRow(
+                "Move to another day",
+                onMove,
+                subtitle = "For a video filmed on a different day",
+                icon = LineIcons.Days,
+            )
             ActionRow(
                 if (clip.caption.isEmpty()) "Add a caption" else "Edit caption",
                 onCaption,
                 // What it says now, so the row doubles as a way to read it.
-                subtitle = clip.caption.ifEmpty { null },
-                icon = LineIcons.Write,
+                subtitle = clip.caption.ifEmpty { "Shown on this second in your reel" },
+                icon = LineIcons.Caption,
             )
-            Hairline(divider)
         }
         ActionRow(
             if (place == null) "Add a place" else "Change place",
@@ -96,15 +131,13 @@ fun DayOptionsSheet(
             icon = LineIcons.Place,
         )
         if (clip != null) {
-            Spacer(Modifier.height(16.dp))
-            Hairline()
-            Spacer(Modifier.height(8.dp))
             ActionRow(
                 "Delete this second",
                 onDelete,
-                subtitle = "Your writing and photos stay. You can undo, and it stays in " +
-                    "Recently deleted for ${DeletedClip.KEEP_DAYS} days.",
+                subtitle = "Writing and photos stay. Undo, or restore from Recently deleted " +
+                    "for ${DeletedClip.KEEP_DAYS} days",
                 icon = LineIcons.Trash,
+                titleColor = Palette.Error,
             )
         }
     }
@@ -121,10 +154,10 @@ fun MoodSheet(date: LocalDate, selected: Mood?, onPick: (Mood?) -> Unit, onDismi
     ) {
         MoodRow(selected = selected, onPick = { onPick(it) })
         if (selected != null) {
-            QuietButton(
+            TextAction(
                 "Remove the mood",
                 { onPick(null) },
-                Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(top = 12.dp),
+                Modifier.padding(horizontal = ScreenPadding - 12.dp).padding(top = 8.dp),
             )
         }
     }
@@ -145,8 +178,8 @@ fun CaptionDialog(date: LocalDate, current: String, onSave: (String) -> Unit, on
         onDismiss = onDismiss,
         title = "Caption for ${RecapLabels.dayAndMonth(date)}",
         buttons = {
-            QuietButton("Cancel", onDismiss, Modifier.weight(1f))
-            RoseButton("Save", { onSave(text) }, Modifier.weight(1f))
+            TextAction("Cancel", onDismiss)
+            RoseButton("Save", { onSave(text) })
         },
     ) {
         OutlinedTextField(
@@ -186,8 +219,8 @@ fun PlaceDialog(
         onDismiss = onDismiss,
         title = "Place for ${RecapLabels.dayAndMonth(date)}",
         buttons = {
-            QuietButton("Cancel", onDismiss, Modifier.weight(1f))
-            RoseButton("Save", { onSave(text) }, Modifier.weight(1f))
+            TextAction("Cancel", onDismiss)
+            RoseButton("Save", { onSave(text) })
         },
     ) {
         OutlinedTextField(
@@ -220,6 +253,7 @@ fun PlaceDialog(
                     }
                 },
                 enabled = !finding,
+                icon = LineIcons.Place,
                 modifier = Modifier.padding(top = 8.dp),
             )
             if (notFound) {
@@ -237,7 +271,6 @@ fun PlaceDialog(
 /** What can be done with one entry. */
 @Composable
 fun EntrySheet(entry: Entry, onEdit: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
-    val divider = Modifier.padding(horizontal = ScreenPadding)
     AppSheet(onDismiss = onDismiss) {
         if (entry.type != EntryType.PHOTO) {
             ActionRow(
@@ -249,9 +282,8 @@ fun EntrySheet(entry: Entry, onEdit: () -> Unit, onDelete: () -> Unit, onDismiss
                 onEdit,
                 icon = LineIcons.Write,
             )
-            Hairline(divider)
         }
-        ActionRow("Delete this entry", onDelete, icon = LineIcons.Trash)
+        ActionRow("Delete this entry", onDelete, icon = LineIcons.Trash, titleColor = Palette.Error)
     }
 }
 
@@ -268,8 +300,8 @@ fun ConfirmDeleteEntryDialog(entry: Entry, onDelete: () -> Unit, onDismiss: () -
         onDismiss = onDismiss,
         title = "Delete this entry?",
         buttons = {
-            QuietButton("Keep it", onDismiss, Modifier.weight(1f))
-            QuietButton("Delete", onDelete, Modifier.weight(1f))
+            TextAction("Keep it", onDismiss)
+            QuietButton("Delete", onDelete, color = Palette.Error)
         },
     ) {
         BodyText("This removes $thing from your phone. Unlike a deleted second, it can't be brought back.")
@@ -286,9 +318,11 @@ fun PhotoViewer(file: File, onDismiss: () -> Unit) {
                 description = "The photo, full size",
                 contentScale = ContentScale.Fit,
                 maxSidePx = 2048,
-                modifier = Modifier.fillMaxSize().padding(top = 56.dp),
+                shape = RectangleShape,
+                ground = Palette.Paper,
+                modifier = Modifier.fillMaxSize().padding(top = 64.dp),
             )
-            Column(Modifier.align(Alignment.TopStart).padding(8.dp)) {
+            Column(Modifier.align(Alignment.TopStart).padding(horizontal = 4.dp, vertical = 8.dp)) {
                 IconAction(LineIcons.Close, "Close the photo", onDismiss)
             }
         }

@@ -5,6 +5,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
+import kotlin.math.roundToInt
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
@@ -29,8 +31,9 @@ import java.util.Locale
 
 /**
  * Draws a year in pixels as a 1080 x 1920 picture (a phone wallpaper or story, in
- * other words) and saves it to the gallery: the title, the grid, a legend with the
- * number of days per mood, and a small Kilasan mark.
+ * other words) and saves it to the gallery: the year as a title, the grid, a legend
+ * of what the colours mean, and a line at the foot with the share of good days and
+ * the app's name.
  */
 class PixelsExporter(private val context: Context) {
 
@@ -47,90 +50,115 @@ class PixelsExporter(private val context: Context) {
             name
         }
 
-    private val sans: Typeface by lazy {
-        ResourcesCompat.getFont(context, R.font.instrument_sans) ?: Typeface.DEFAULT
+    private val flex: Typeface by lazy {
+        ResourcesCompat.getFont(context, R.font.roboto_flex) ?: Typeface.DEFAULT
     }
 
-    private fun text(size: Float, weight: Int, color: Int, align: Paint.Align = Paint.Align.LEFT) =
-        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            typeface = sans
-            // One variable font file; the weight is a setting on it.
-            fontVariationSettings = "'wght' $weight"
-            textSize = size
-            this.color = color
-            textAlign = align
-        }
+    private fun text(
+        size: Float,
+        weight: Int,
+        color: Int,
+        align: Paint.Align = Paint.Align.LEFT,
+        slanted: Boolean = false,
+    ) = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = flex
+        // One variable font file; the weight and the slant are settings on it.
+        fontVariationSettings = "'wght' $weight, 'slnt' ${if (slanted) -10 else 0}"
+        textSize = size
+        this.color = color
+        textAlign = align
+    }
 
     private fun draw(year: Int, moods: Map<LocalDate, Mood>, today: LocalDate): Bitmap {
         val bitmap = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.WHITE)
 
-        val title = text(76f, 600, INK).apply { letterSpacing = -0.03f }
-        canvas.drawText("$year in pixels", MARGIN, 170f, title)
+        // "2026" in ink, then "in pixels" slanted in rose on the same line.
+        val title = text(149f, 600, INK)
+        canvas.drawText(year.toString(), MARGIN, TITLE_BASELINE, title)
+        canvas.drawText(
+            "in pixels",
+            MARGIN + title.measureText(year.toString()) + 27f,
+            TITLE_BASELINE,
+            text(91f, 500, ROSE, slanted = true),
+        )
 
-        // The grid: months across, days down.
-        val gridTop = 290f
-        val labelWidth = 64f
-        val step = 42f
-        val cell = 34f
-        val gridLeft = (WIDTH - (labelWidth + Pixels.MONTHS * step)) / 2f + labelWidth
-        val label = text(24f, 400, MUTED, Paint.Align.CENTER)
+        // The grid: months across, days down, filling the width between the margins.
+        val width = WIDTH - 2 * MARGIN
+        val cellW = (width - GAP * (Pixels.MONTHS - 1)) / Pixels.MONTHS
+        val label = text(24f, 500, MUTED, Paint.Align.CENTER)
         val locale = Locale.getDefault()
         for (month in 1..Pixels.MONTHS) {
             canvas.drawText(
                 Month.of(month).getDisplayName(TextStyle.NARROW, locale),
-                gridLeft + (month - 1) * step + cell / 2,
-                gridTop - 18f,
+                MARGIN + (month - 1) * (cellW + GAP) + cellW / 2,
+                GRID_TOP - 16f,
                 label,
             )
         }
-        val dayLabel = text(24f, 400, MUTED, Paint.Align.RIGHT)
         val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-        val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        // A day without a mood is a dashed outline, as it is on the page in the app.
+        val dashed = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 2f
-            color = HAIRLINE
+            strokeWidth = 2.5f
+            color = EMPTY
+            pathEffect = DashPathEffect(floatArrayOf(8f, 5f), 0f)
         }
         for (day in 1..Pixels.DAYS) {
-            val top = gridTop + (day - 1) * step
-            if (day == 1 || day % 5 == 0) canvas.drawText(day.toString(), gridLeft - 16f, top + cell - 9f, dayLabel)
+            val top = GRID_TOP + (day - 1) * (CELL_HEIGHT + GAP)
             for (month in 1..Pixels.MONTHS) {
-                val left = gridLeft + (month - 1) * step
-                val rect = RectF(left, top, left + cell, top + cell)
+                val left = MARGIN + (month - 1) * (cellW + GAP)
+                val rect = RectF(left, top, left + cellW, top + CELL_HEIGHT)
                 val pixel = Pixels.at(year, month, day, moods, today)
                 when (pixel.kind) {
                     PixelKind.MOOD -> {
                         fill.color = moodColor(pixel.mood!!)
-                        canvas.drawRoundRect(rect, 7f, 7f, fill)
+                        canvas.drawRoundRect(rect, RADIUS, RADIUS, fill)
                     }
-                    PixelKind.EMPTY -> canvas.drawRoundRect(rect, 7f, 7f, outline)
-                    PixelKind.FUTURE -> {
-                        fill.color = HAIRLINE
-                        canvas.drawCircle(rect.centerX(), rect.centerY(), 4f, fill)
+                    PixelKind.EMPTY -> {
+                        rect.inset(1.25f, 1.25f)
+                        canvas.drawRoundRect(rect, RADIUS, RADIUS, dashed)
                     }
-                    PixelKind.ABSENT -> Unit
+                    // Days still to come are left as paper.
+                    PixelKind.FUTURE, PixelKind.ABSENT -> Unit
                 }
             }
         }
 
-        // The legend: best days first, each with its count.
-        val counts = JournalMath.moodCounts(moods.filterKeys { it.year == year }.values)
-        val legendTop = gridTop + Pixels.DAYS * step + 40f
-        val name = text(28f, 400, INK)
-        val count = text(28f, 400, MUTED)
-        val columnWidth = (WIDTH - 2 * MARGIN) / 3f
-        Mood.entries.reversed().forEachIndexed { index, mood ->
-            val x = MARGIN + (index % 3) * columnWidth
-            val y = legendTop + (index / 3) * 64f
-            fill.color = moodColor(mood)
-            canvas.drawRoundRect(RectF(x, y, x + 34f, y + 34f), 7f, 7f, fill)
-            canvas.drawText(mood.label, x + 50f, y + 27f, name)
-            val days = counts[mood] ?: 0
-            canvas.drawText("$days", x + 50f + name.measureText(mood.label) + 12f, y + 27f, count)
+        // The legend: best days first, then what a dashed square is. It wraps like a line of words.
+        val swatch = 27f
+        val name = text(29f, 600, INK)
+        var x = MARGIN
+        var y = GRID_TOP + Pixels.DAYS * (CELL_HEIGHT + GAP) - GAP + 48f
+        val items = Mood.entries.reversed().map { it.label to it } + ("No entry" to null)
+        items.forEach { (word, mood) ->
+            val itemWidth = swatch + 16f + name.measureText(word)
+            if (x + itemWidth > WIDTH - MARGIN) {
+                x = MARGIN
+                y += swatch + 21f
+            }
+            val box = RectF(x, y, x + swatch, y + swatch)
+            if (mood != null) {
+                fill.color = moodColor(mood)
+                canvas.drawRoundRect(box, RADIUS, RADIUS, fill)
+            } else {
+                box.inset(1.25f, 1.25f)
+                canvas.drawRoundRect(box, RADIUS, RADIUS, dashed)
+            }
+            canvas.drawText(word, x + swatch + 16f, y + swatch - 4f, name)
+            x += itemWidth + 43f
         }
 
-        canvas.drawText("Kilasan", WIDTH / 2f, HEIGHT - 70f, text(26f, 600, MUTED, Paint.Align.CENTER))
+        // The foot: how much of the year was good, and whose picture this is.
+        val counts = JournalMath.moodCounts(moods.filterKeys { it.year == year }.values)
+        val marked = counts.values.sum()
+        val foot = HEIGHT - MARGIN
+        if (marked > 0) {
+            val bright = (counts[Mood.GOOD] ?: 0) + (counts[Mood.GREAT] ?: 0)
+            canvas.drawText("${(bright * 100f / marked).roundToInt()}% good or great days", MARGIN, foot, text(29f, 500, INK))
+        }
+        canvas.drawText("Kilasan", WIDTH - MARGIN, foot, text(29f, 500, INK, Paint.Align.RIGHT))
         return bitmap
     }
 
@@ -176,18 +204,26 @@ class PixelsExporter(private val context: Context) {
     private companion object {
         const val WIDTH = 1080
         const val HEIGHT = 1920
-        const val MARGIN = 96f
         const val ALBUM = "Kilasan"
+
+        // The picture is the design's 405 x 720 board at eight thirds of its size.
+        const val MARGIN = 80f
+        const val TITLE_BASELINE = 236f
+        const val GRID_TOP = 350f
+        const val CELL_HEIGHT = 34.67f
+        const val GAP = 8f
+        const val RADIUS = 8f
 
         // The app's palette (ui/theme/Theme.kt), as plain colour ints: this class draws
         // with android.graphics, not Compose.
         val INK = Color.parseColor("#2E2329")
         val MUTED = Color.parseColor("#6E6168")
-        val HAIRLINE = Color.parseColor("#F1E6EA")
+        val ROSE = Color.parseColor("#AE4A6B")
+        val EMPTY = Color.parseColor("#D9A7BB")
 
         fun moodColor(mood: Mood): Int = Color.parseColor(
             when (mood) {
-                Mood.GREAT -> "#FCE4EC"
+                Mood.GREAT -> "#F9D3E0"
                 Mood.GOOD -> "#F7BDD0"
                 Mood.NEUTRAL -> "#E58AAB"
                 Mood.BAD -> "#B8527A"

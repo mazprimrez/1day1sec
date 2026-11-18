@@ -1,5 +1,6 @@
 package com.onedayonesecond.ui.day
 
+import kotlinx.coroutines.flow.first
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.pm.PackageManager
@@ -8,14 +9,8 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,10 +19,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -39,10 +32,11 @@ import com.onedayonesecond.location.PlaceFinder
 import com.onedayonesecond.ui.theme.ActionRow
 import com.onedayonesecond.ui.theme.AppSheet
 import com.onedayonesecond.ui.theme.AppType
-import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.LineIcons
 import com.onedayonesecond.ui.theme.MetaText
 import com.onedayonesecond.ui.theme.Palette
+import com.onedayonesecond.ui.theme.TextAction
+import com.onedayonesecond.ui.theme.SwitchRow
 import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
@@ -82,7 +76,9 @@ fun AddSheet(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { }
     LaunchedEffect(Unit) {
-        if (isToday && !container.places.hasPermission && !container.journalPrefs.locationAsked()) {
+        if (isToday && !container.places.hasPermission && !container.journalPrefs.locationAsked() &&
+            container.journalPrefs.tagPlaces.first()
+        ) {
             container.journalPrefs.setLocationAsked()
             locationLauncher.launch(PlaceFinder.PERMISSIONS)
         }
@@ -140,35 +136,17 @@ fun AddSheet(
     AppSheet(
         onDismiss = onDismiss,
         title = if (choosingPhoto) "Add a photo" else "Add to $dayName",
-        // "Monday, 16 November, Kemang": the neighbourhood is enough here.
+        // "Monday, 16 November · Kemang": the neighbourhood is enough here.
         meta = listOfNotNull(RecapLabels.weekdayAndDay(date), place?.substringBefore(',')?.trim())
-            .joinToString(", "),
+            .joinToString(" · "),
     ) {
         if (choosingPhoto) {
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .toggleable(value = notebook, role = Role.Switch, onValueChange = { notebook = it })
-                    .padding(horizontal = ScreenPadding, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("It's a notebook page", style = AppType.Body, color = Palette.Ink)
-                    MetaText("Its handwriting is typed out for you. The photo is sent to the app's AI service to be read.")
-                }
-                Switch(
-                    checked = notebook,
-                    onCheckedChange = null,
-                    colors = SwitchDefaults.colors(
-                        checkedTrackColor = Palette.Rose,
-                        checkedThumbColor = Palette.Paper,
-                        uncheckedTrackColor = Palette.Paper,
-                        uncheckedBorderColor = Palette.Muted,
-                        uncheckedThumbColor = Palette.Muted,
-                    ),
-                    modifier = Modifier.padding(start = 12.dp),
-                )
-            }
+            SwitchRow(
+                title = "It's a notebook page",
+                checked = notebook,
+                onCheckedChange = { notebook = it },
+                subtitle = "Its handwriting is typed out for you. The photo is sent to the app's AI service to be read.",
+            )
             Column(
                 Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -181,6 +159,7 @@ fun AddSheet(
                         if (allowed) openCamera() else cameraPermission.launch(Manifest.permission.CAMERA)
                     },
                     enabled = !saving,
+                    icon = LineIcons.Camera,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 QuietButton(
@@ -191,10 +170,11 @@ fun AddSheet(
                         )
                     },
                     enabled = !saving,
+                    icon = LineIcons.Image,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (saving) MetaText("Saving…")
-                QuietButton("Back", { choosingPhoto = false }, Modifier.fillMaxWidth(), enabled = !saving)
+                TextAction("Back", { choosingPhoto = false }, Modifier.fillMaxWidth(), enabled = !saving)
             }
         } else {
             RoseButton(
@@ -205,20 +185,28 @@ fun AddSheet(
                     else -> "Record this day's second"
                 },
                 onClick = onRecord,
+                icon = LineIcons.Camera,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenPadding),
             )
-            Spacer(Modifier.height(12.dp))
+            Text(
+                "Or add an entry",
+                style = AppType.TitleSmall,
+                color = Palette.Muted,
+                modifier = Modifier.padding(start = ScreenPadding, top = 20.dp, bottom = 4.dp),
+            )
             ActionRow("Write", onWrite, icon = LineIcons.Write)
-            Hairline(Modifier.padding(horizontal = ScreenPadding))
-            ActionRow("Voice note", onVoice, icon = LineIcons.Mic)
-            Hairline(Modifier.padding(horizontal = ScreenPadding))
+            ActionRow(
+                "Voice note",
+                onVoice,
+                subtitle = "Indonesian or English, typed out for you",
+                icon = LineIcons.Mic,
+            )
             ActionRow(
                 "Photo",
                 onClick = { choosingPhoto = true },
                 subtitle = "Notebook pages are typed out for you",
                 icon = LineIcons.Image,
             )
-            Hairline(Modifier.padding(horizontal = ScreenPadding))
             ActionRow("Draw with S Pen", onDraw, icon = LineIcons.Pen)
         }
     }

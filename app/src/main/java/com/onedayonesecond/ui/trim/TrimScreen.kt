@@ -27,6 +27,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.style.TextAlign
+import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.TextAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -70,12 +75,10 @@ import com.onedayonesecond.ui.common.CLIP_ASPECT
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BackBar
 import com.onedayonesecond.ui.theme.BodyText
-import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TileShape
 import com.onedayonesecond.ui.theme.appTextFieldColors
 import java.util.Locale
 
@@ -121,12 +124,12 @@ fun TrimScreen(
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        BackBar(onBack, backLabel = "Back to retake")
+        BackBar(onBack, backLabel = "Back to retake", title = "Pick your second")
 
         // The preview is the portrait frame the second will be saved in: a wider
         // recording is cropped here exactly as it will be when saved.
         Box(Modifier.weight(1f).fillMaxWidth().padding(horizontal = ScreenPadding), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxHeight().aspectRatio(CLIP_ASPECT, matchHeightConstraintsFirst = true).clip(TileShape)) {
+            Box(Modifier.fillMaxHeight().aspectRatio(CLIP_ASPECT, matchHeightConstraintsFirst = true).clip(Corners.Preview)) {
                 AndroidView(
                     factory = {
                         PlayerView(it).apply {
@@ -141,6 +144,20 @@ fun TrimScreen(
                         }
                     },
                     modifier = Modifier.fillMaxSize(),
+                )
+
+                // Says that what is playing is the chosen second going round, and where it starts.
+                Text(
+                    "LOOP ${state.startMs.asTimecode()}",
+                    style = AppType.FrameNumber,
+                    color = Palette.Paper,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(10.dp)
+                        .clip(Corners.Chip)
+                        .background(Palette.Ink.copy(alpha = 0.72f))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                        .clearAndSetSemantics { },
                 )
 
                 if (state.isProcessing) {
@@ -160,25 +177,32 @@ fun TrimScreen(
             }
         }
 
-        Column(
-            modifier = Modifier.padding(horizontal = ScreenPadding).padding(top = 12.dp, bottom = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            MetaText(
-                "${RecapLabels.weekdayAndDay(state.date)}. Keeping ${state.startMs.asSeconds()} to " +
-                    "${state.endMs.asSeconds()} of ${state.durationMs.asSeconds()} seconds.",
-            )
+        Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Drag the window", style = AppType.TitleSmall, color = Palette.Ink, modifier = Modifier.weight(1f))
+                Text(
+                    "${state.startMs.asTimecode()}–${state.endMs.asTimecode()}",
+                    style = AppType.Timecode,
+                    color = Palette.Rose,
+                    modifier = Modifier.semantics {
+                        contentDescription = "Keeping ${state.startMs.asSeconds()} to ${state.endMs.asSeconds()} " +
+                            "of ${state.durationMs.asSeconds()} seconds, for ${RecapLabels.weekdayAndDay(state.date)}"
+                    },
+                )
+            }
 
             Filmstrip(
                 state = state,
                 enabled = state.maxStartMs > 0 && !state.isProcessing,
                 onCommit = viewModel::setStart,
+                modifier = Modifier.padding(top = 8.dp),
             )
 
             OutlinedTextField(
                 value = state.caption,
                 onValueChange = viewModel::setCaption,
-                label = { Text("Caption (optional)") },
+                label = { Text("Caption") },
+                placeholder = { Text("Optional") },
                 // One line to type: where it wraps on the reel is decided when it is drawn.
                 singleLine = true,
                 enabled = !state.isProcessing,
@@ -186,23 +210,36 @@ fun TrimScreen(
                     capitalization = KeyboardCapitalization.Sentences,
                     imeAction = ImeAction.Done,
                 ),
-                supportingText = { Text("${state.caption.length} of ${Captions.MAX_LENGTH}") },
+                supportingText = {
+                    Text(
+                        if (state.caption.isEmpty()) {
+                            "Shown on this second in your reel"
+                        } else {
+                            "Shown on this second in your reel. ${state.caption.length} of ${Captions.MAX_LENGTH}"
+                        },
+                    )
+                },
                 colors = appTextFieldColors(),
                 textStyle = AppType.Body,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
             )
 
             state.error?.let {
-                BodyText(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                BodyText(it, Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite })
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuietButton("Retake", onBack, Modifier.weight(1f), enabled = !state.isProcessing)
+            Row(
+                Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 20.dp).offset(x = (-12).dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextAction("Retake", onBack, enabled = !state.isProcessing)
+                Spacer(Modifier.weight(1f))
                 RoseButton(
                     "Use this second",
                     viewModel::confirm,
-                    Modifier.weight(1.4f),
+                    Modifier.offset(x = 12.dp),
                     enabled = state.durationMs > 0 && !state.isProcessing,
+                    icon = LineIcons.Check,
                 )
             }
         }
@@ -215,7 +252,7 @@ fun TrimScreen(
  * above only reloads when the finger lifts, so dragging stays smooth.
  */
 @Composable
-private fun Filmstrip(state: TrimUiState, enabled: Boolean, onCommit: (Long) -> Unit) {
+private fun Filmstrip(state: TrimUiState, enabled: Boolean, onCommit: (Long) -> Unit, modifier: Modifier = Modifier) {
     val duration = state.durationMs.coerceAtLeast(1)
     val maxStart = state.maxStartMs
     // Where the window is while it is being dragged; null means "where the state says".
@@ -226,87 +263,129 @@ private fun Filmstrip(state: TrimUiState, enabled: Boolean, onCommit: (Long) -> 
     val committed by rememberUpdatedState(state.startMs.toFloat())
     val frames = remember(state.frames) { state.frames.map { it.asImageBitmap() } }
 
-    BoxWithConstraints(
-        Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clip(TileShape)
-            .background(Palette.Blush)
-            .semantics {
-                contentDescription = "Which second to keep"
-                stateDescription =
-                    "${(startMs / 1000f).oneDecimal()} to ${((startMs + VideoSpec.CLIP_DURATION_MS) / 1000f).oneDecimal()} seconds"
-                progressBarRangeInfo = ProgressBarRangeInfo(startMs, 0f..maxStart.toFloat().coerceAtLeast(1f))
-                if (enabled) {
-                    setProgress { target ->
-                        onCommit(target.toLong().coerceIn(0, maxStart))
-                        true
+    Column(modifier) {
+        BoxWithConstraints(
+            Modifier
+                .fillMaxWidth()
+                .height(STRIP_HEIGHT + WINDOW_OVERHANG * 2)
+                .semantics {
+                    contentDescription = "Start of your second"
+                    stateDescription =
+                        "${(startMs / 1000f).oneDecimal()} to ${((startMs + VideoSpec.CLIP_DURATION_MS) / 1000f).oneDecimal()} seconds"
+                    progressBarRangeInfo = ProgressBarRangeInfo(startMs, 0f..maxStart.toFloat().coerceAtLeast(1f))
+                    if (enabled) {
+                        setProgress { target ->
+                            onCommit(target.toLong().coerceIn(0, maxStart))
+                            true
+                        }
                     }
                 }
-            }
-            .then(
-                if (!enabled) {
-                    Modifier
-                } else {
-                    Modifier
-                        .pointerInput(duration, maxStart) {
-                            detectTapGestures { tap ->
-                                // Centre the window on the tap.
-                                val centre = tap.x / size.width * duration
-                                onCommit((centre - VideoSpec.CLIP_DURATION_MS / 2f).toLong().coerceIn(0, maxStart))
+                .then(
+                    if (!enabled) {
+                        Modifier
+                    } else {
+                        Modifier
+                            .pointerInput(duration, maxStart) {
+                                detectTapGestures { tap ->
+                                    // Centre the window on the tap.
+                                    val centre = tap.x / size.width * duration
+                                    onCommit((centre - VideoSpec.CLIP_DURATION_MS / 2f).toLong().coerceIn(0, maxStart))
+                                }
                             }
-                        }
-                        .pointerInput(duration, maxStart) {
-                            detectHorizontalDragGestures(
-                                onDragStart = { dragging = committed },
-                                onDragEnd = {
-                                    dragging?.let { onCommit(it.toLong()) }
-                                    dragging = null
-                                },
-                                onDragCancel = { dragging = null },
-                            ) { change, dx ->
-                                change.consume()
-                                val moved = (dragging ?: committed) + dx / size.width * duration
-                                dragging = moved.coerceIn(0f, maxStart.toFloat())
+                            .pointerInput(duration, maxStart) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { dragging = committed },
+                                    onDragEnd = {
+                                        dragging?.let { onCommit(it.toLong()) }
+                                        dragging = null
+                                    },
+                                    onDragCancel = { dragging = null },
+                                ) { change, dx ->
+                                    change.consume()
+                                    val moved = (dragging ?: committed) + dx / size.width * duration
+                                    dragging = moved.coerceIn(0f, maxStart.toFloat())
+                                }
                             }
-                        }
-                },
-            ),
-    ) {
-        Row(Modifier.fillMaxSize()) {
-            frames.forEach { frame ->
-                Image(
-                    frame,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                )
+                    },
+                ),
+        ) {
+            // The stills, each a small frame of its own, like a strip of film.
+            Row(
+                Modifier.fillMaxSize().padding(vertical = WINDOW_OVERHANG),
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                if (frames.isEmpty()) {
+                    Box(Modifier.fillMaxSize().clip(Corners.MiniFrame).background(Palette.Blush))
+                }
+                frames.forEach { frame ->
+                    Image(
+                        frame,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.weight(1f).fillMaxHeight().clip(Corners.MiniFrame).background(Palette.Blush),
+                    )
+                }
             }
+
+            val total = maxWidth
+            val windowWidth = total * (VideoSpec.CLIP_DURATION_MS.toFloat() / duration).coerceIn(0f, 1f)
+            val windowStart = total * (startMs / duration).coerceIn(0f, 1f)
+
+            // Everything outside the window is washed out, so the kept second stands out.
+            Box(
+                Modifier
+                    .padding(vertical = WINDOW_OVERHANG)
+                    .width(windowStart)
+                    .fillMaxHeight()
+                    .background(Palette.Paper.copy(alpha = 0.65f)),
+            )
+            Box(
+                Modifier
+                    .offset(x = windowStart + windowWidth)
+                    .padding(vertical = WINDOW_OVERHANG)
+                    .width((total - windowStart - windowWidth).coerceAtLeast(0.dp))
+                    .fillMaxHeight()
+                    .background(Palette.Paper.copy(alpha = 0.65f)),
+            )
+            // The window stands a little taller than the strip, so it reads as a thing to hold.
+            Box(
+                Modifier
+                    .offset(x = windowStart)
+                    .width(windowWidth.coerceAtLeast(8.dp))
+                    .fillMaxHeight()
+                    .border(3.dp, Palette.Rose, RoundedCornerShape(6.dp)),
+            )
         }
 
-        val total = maxWidth
-        val windowWidth = total * (VideoSpec.CLIP_DURATION_MS.toFloat() / duration).coerceIn(0f, 1f)
-        val windowStart = total * (startMs / duration).coerceIn(0f, 1f)
-
-        // Everything outside the window is washed out, so the kept second stands out.
-        Box(Modifier.width(windowStart).fillMaxHeight().background(Palette.Paper.copy(alpha = 0.65f)))
-        Box(
-            Modifier
-                .offset(x = windowStart + windowWidth)
-                .width((total - windowStart - windowWidth).coerceAtLeast(0.dp))
-                .fillMaxHeight()
-                .background(Palette.Paper.copy(alpha = 0.65f)),
-        )
-        Box(
-            Modifier
-                .offset(x = windowStart)
-                .width(windowWidth.coerceAtLeast(6.dp))
-                .fillMaxHeight()
-                .border(2.dp, Palette.Rose, RoundedCornerShape(6.dp)),
-        )
+        // When each still was taken, in seconds from the start.
+        if (frames.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().clearAndSetSemantics { },
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                frames.indices.forEach { index ->
+                    Text(
+                        (index * duration / frames.size / 1000f).oneDecimal(),
+                        style = AppType.FrameNumber,
+                        color = Palette.Muted,
+                        textAlign = TextAlign.Center,
+                        maxLines = 1,
+                        softWrap = false,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
     }
 }
+
+private val STRIP_HEIGHT = 56.dp
+private val WINDOW_OVERHANG = 4.dp
 
 private fun Float.oneDecimal(): String = String.format(Locale.US, "%.1f", this)
 
 private fun Long.asSeconds(): String = (this / 1000f).oneDecimal()
+
+/** "00:02.0": minutes, seconds and tenths, the way the strip is read. */
+private fun Long.asTimecode(): String =
+    String.format(Locale.US, "%02d:%02d.%d", this / 60_000, this / 1000 % 60, this / 100 % 10)

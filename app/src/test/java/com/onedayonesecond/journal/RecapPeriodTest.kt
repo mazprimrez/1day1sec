@@ -85,6 +85,12 @@ class RecapPeriodTest {
         assertEquals("9 to 15 November", RecapLabels.long(RecapPeriod.Week(monday)))
     }
 
+    @Test
+    fun `the tight form of a week uses a dash and names the first month only when it differs`() {
+        assertEquals("9\u201315 Nov", RecapLabels.tight(RecapPeriod.Week(monday)))
+        assertEquals("26 Oct\u20131 Nov", RecapLabels.tight(RecapPeriod.Week(LocalDate.of(2026, 10, 26))))
+    }
+
     // When recaps are written
 
     @Test

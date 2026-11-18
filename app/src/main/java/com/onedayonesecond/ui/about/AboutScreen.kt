@@ -6,6 +6,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
+import com.onedayonesecond.ui.theme.AppType
+import com.onedayonesecond.ui.theme.Palette
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -16,7 +19,6 @@ import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.HeadingText
 import com.onedayonesecond.ui.theme.MetaText
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 
 /**
  * What the app is, and where the things it did not make itself come from. Open
@@ -25,14 +27,13 @@ import com.onedayonesecond.ui.theme.TitleText
 @Composable
 fun AboutScreen(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack, backLabel = "Back to Reel")
+        BackBar(onBack, backLabel = "Back to Reel", title = "About Kilasan")
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TitleText("About Kilasan")
             BodyText("A diary of one second a day, what you wrote on it, and what you thought while reading.")
-            MetaText("Version ${BuildConfig.VERSION_NAME}")
+            Text("VERSION ${BuildConfig.VERSION_NAME}", style = AppType.FrameNumber, color = Palette.Muted)
 
             Hairline(Modifier.padding(top = 8.dp))
             HeadingText("Books", Modifier.padding(top = 8.dp))

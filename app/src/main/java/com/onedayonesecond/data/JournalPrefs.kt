@@ -1,5 +1,8 @@
 package com.onedayonesecond.data
 
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import java.time.LocalTime
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
@@ -30,7 +33,10 @@ data class ThoughtDraft(
     val mediaType: ThoughtType? = null,
 )
 
-/** Small things the journal remembers: the name letters are addressed to, and failed recaps. */
+/**
+ * Small things the app remembers: the name letters are addressed to, whether and when
+ * to remind, whether entries get a place, when the last backup finished, and failed recaps.
+ */
 class JournalPrefs(context: Context) {
 
     private val dataStore = context.applicationContext.journalDataStore
@@ -44,6 +50,37 @@ class JournalPrefs(context: Context) {
 
     suspend fun setName(name: String) {
         dataStore.edit { it[NAME] = name.trim().take(MAX_NAME_LENGTH) }
+    }
+
+    /** Whether the daily reminder is on. It is, until switched off in Settings. */
+    val reminderEnabled: Flow<Boolean> = safeData.map { it[REMINDER_ENABLED] ?: true }
+
+    suspend fun setReminderEnabled(enabled: Boolean) {
+        dataStore.edit { it[REMINDER_ENABLED] = enabled }
+    }
+
+    /** The time of day the reminder comes, when today has no second yet. */
+    val reminderTime: Flow<LocalTime> = safeData.map { prefs ->
+        prefs[REMINDER_MINUTE]?.takeIf { it in 0 until MINUTES_IN_DAY }?.let { LocalTime.of(it / 60, it % 60) }
+            ?: DEFAULT_REMINDER_TIME
+    }
+
+    suspend fun setReminderTime(time: LocalTime) {
+        dataStore.edit { it[REMINDER_MINUTE] = time.hour * 60 + time.minute }
+    }
+
+    /** Whether new entries are tagged with where the phone is. On, until switched off in Settings. */
+    val tagPlaces: Flow<Boolean> = safeData.map { it[TAG_PLACES] ?: true }
+
+    suspend fun setTagPlaces(enabled: Boolean) {
+        dataStore.edit { it[TAG_PLACES] = enabled }
+    }
+
+    /** When the last backup to Google Drive finished, in epoch milliseconds. Null before the first. */
+    val lastBackupAt: Flow<Long?> = safeData.map { it[LAST_BACKUP_AT] }
+
+    suspend fun setLastBackupAt(millis: Long) {
+        dataStore.edit { it[LAST_BACKUP_AT] = millis }
     }
 
     /** True once the app has asked for location, so it asks on first use and never nags. */
@@ -105,6 +142,14 @@ class JournalPrefs(context: Context) {
 
     companion object {
         const val MAX_NAME_LENGTH = 40
+
+        /** Eight in the evening: late enough that the day has happened, early enough to still film it. */
+        val DEFAULT_REMINDER_TIME: LocalTime = LocalTime.of(20, 0)
+        private const val MINUTES_IN_DAY = 24 * 60
+        private val REMINDER_ENABLED = booleanPreferencesKey("reminder_enabled")
+        private val REMINDER_MINUTE = intPreferencesKey("reminder_minute")
+        private val TAG_PLACES = booleanPreferencesKey("tag_places")
+        private val LAST_BACKUP_AT = longPreferencesKey("last_backup_at")
         private const val DRAFT_PREFIX = "thought_draft_"
         private val NAME = stringPreferencesKey("name")
         private val LOCATION_ASKED = booleanPreferencesKey("location_asked")

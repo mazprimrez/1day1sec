@@ -1,5 +1,6 @@
 package com.onedayonesecond
 
+import kotlinx.coroutines.flow.first
 import android.app.Application
 import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.work.BookWork
@@ -17,7 +18,6 @@ class OneDayApp : Application() {
         super.onCreate()
         container = AppContainer(this)
         Reminders.createChannel(this)
-        Reminders.schedule(this)
         // Recordings and reels from a previous run are scratch data by
         // definition — a finished clip has already been moved into filesDir.
         container.storage.clearCaptures()
@@ -25,6 +25,12 @@ class OneDayApp : Application() {
 
         JournalWork.scheduleRecaps(this)
         container.appScope.launch {
+            // The daily reminder, at the time chosen in Settings, unless it is switched off there.
+            if (container.journalPrefs.reminderEnabled.first()) {
+                Reminders.schedule(this@OneDayApp, container.journalPrefs.reminderTime.first())
+            } else {
+                Reminders.cancel(this@OneDayApp)
+            }
             // Seconds deleted more than thirty days ago leave the trash for good.
             container.repository.purgeDeleted()
             // Voice notes and pages saved while offline get another go.

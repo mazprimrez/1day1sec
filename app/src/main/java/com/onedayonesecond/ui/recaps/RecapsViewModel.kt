@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.AppContainer
 import com.onedayonesecond.OneDayApp
+import com.onedayonesecond.data.ClipEntity
 import com.onedayonesecond.data.Recap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,8 +23,8 @@ data class RecapsUiState(
     val years: List<Int> = listOf(LocalDate.now().year),
     /** The recaps that have been written, by key. */
     val recaps: Map<String, Recap> = emptyMap(),
-    /** What letters call the user. Empty until they give a name. */
-    val name: String = "",
+    /** Every second that has been kept, by day: the little frames beside each week. */
+    val clips: Map<LocalDate, ClipEntity> = emptyMap(),
     val today: LocalDate = LocalDate.now(),
 )
 
@@ -35,13 +36,13 @@ class RecapsViewModel(private val container: AppContainer) : ViewModel() {
     val state: StateFlow<RecapsUiState> = combine(
         firstYear,
         container.journal.observeRecaps(),
-        container.journalPrefs.name,
-    ) { first, recaps, name ->
+        container.repository.observeAll(),
+    ) { first, recaps, clips ->
         val today = LocalDate.now()
         RecapsUiState(
             years = (minOf(first, today.year)..today.year).toList(),
             recaps = recaps.associateBy { it.key },
-            name = name,
+            clips = clips.associateBy { it.date },
             today = today,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), RecapsUiState())
@@ -59,10 +60,6 @@ class RecapsViewModel(private val container: AppContainer) : ViewModel() {
             ).minOrNull()
             firstYear.value = earliest?.year ?: LocalDate.now().year
         }
-    }
-
-    fun setName(name: String) {
-        viewModelScope.launch { container.journalPrefs.setName(name) }
     }
 
     companion object {

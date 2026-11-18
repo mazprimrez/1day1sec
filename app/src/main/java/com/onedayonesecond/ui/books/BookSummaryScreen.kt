@@ -17,6 +17,17 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.semantics.contentDescription
+import com.onedayonesecond.ui.theme.HeadlineText
+import com.onedayonesecond.ui.theme.InlineAlert
+import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.StateCard
+import com.onedayonesecond.ui.theme.TintCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,10 +35,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -56,7 +63,6 @@ import com.onedayonesecond.ui.theme.Palette
 import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import com.onedayonesecond.work.BookWork
 import kotlinx.coroutines.launch
 
@@ -115,7 +121,7 @@ fun BookSummaryScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack, backLabel = "Back to the book")
+        BackBar(onBack, backLabel = "Back to the book", title = "Summary and review ideas")
         if (!loaded || current == null) return@Column
 
         when {
@@ -153,43 +159,66 @@ fun BookSummaryScreen(
                 },
             )
 
-            !enough -> Waiting(current, "Summary and review ideas") {
+            !enough -> Waiting(current) {
                 val needed = BookRules.MIN_THOUGHTS_FOR_SUMMARY - withWords
-                BodyText(
-                    if (needed == 1) {
-                        "This needs one more thought."
-                    } else {
-                        "This needs $needed more thoughts."
-                    },
-                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-                MetaText(
-                    "It is written from what you noted while reading, once there are " +
-                        "${BookRules.MIN_THOUGHTS_FOR_SUMMARY} thoughts with words. A photo of a page on its own " +
-                        "doesn't count; add a line to it and it does.",
-                )
-                RoseButton("Add a thought", onAddThought, Modifier.fillMaxWidth().padding(top = 8.dp))
-            }
-
-            isWriting || (problem == null && generator.isConfigured) -> Waiting(current, "Summary and review ideas") {
-                PlaceholderLines()
-                MetaText(
-                    "Being written from your ${BookLabels.thoughts(withWords)}. Takes about a minute.",
-                    Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                )
-            }
-
-            else -> Waiting(current, "Summary and review ideas") {
-                val (text, action) = when (problem) {
-                    Outcome.Offline ->
-                        "No internet right now. It will be written as soon as you're back online; your thoughts " +
-                            "are saved on your phone." to "Try now"
-                    is Outcome.Failed -> "This couldn't be written. ${problem.message}".trim() to "Try again"
-                    else -> "Summaries aren't set up in this build of the app yet." to null
+                val min = BookRules.MIN_THOUGHTS_FOR_SUMMARY
+                StateCard(if (needed == 1) "Your summary needs one more thought" else "Your summary needs $needed more thoughts") {
+                    BodyText(
+                        "You've logged ${BookLabels.thoughts(withWords)} with words on ${current.title}. " +
+                            "Log $min or more and your summary and review ideas appear here.",
+                    )
+                    // One pip per thought needed; the filled ones are logged.
+                    Row(Modifier.clearAndSetSemantics { }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        repeat(min) { index ->
+                            val pip = RoundedCornerShape(3.dp)
+                            Box(
+                                Modifier
+                                    .size(width = 28.dp, height = 6.dp)
+                                    .clip(pip)
+                                    .then(
+                                        if (index < withWords) {
+                                            Modifier.background(Palette.Rose)
+                                        } else {
+                                            Modifier.border(1.dp, Palette.FrameLine, pip)
+                                        },
+                                    ),
+                            )
+                        }
+                    }
+                    SmallText("A photo of a page on its own doesn't count; add a line to it and it does.")
+                    RoseButton("Log a thought", onAddThought, icon = LineIcons.Write)
                 }
-                if (problem == Outcome.Offline) PlaceholderLines()
-                BodyText(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                if (action != null) QuietButton(action, ::write)
+            }
+
+            isWriting || (problem == null && generator.isConfigured) -> Waiting(current) {
+                StateCard("Reading your ${BookLabels.thoughts(withWords)}…") {
+                    PlaceholderLines()
+                    MetaText("Takes a few seconds. If you're offline, it's written as soon as you reconnect.")
+                }
+            }
+
+            else -> Waiting(current) {
+                val (title, text, action) = when (problem) {
+                    Outcome.Offline -> Triple(
+                        "No internet right now",
+                        "Your summary is written as soon as you're back online. Your thoughts are saved on your phone.",
+                        "Try now",
+                    )
+                    is Outcome.Failed -> Triple(
+                        "Your summary wasn't written",
+                        "${problem.message} Your thoughts are safe and nothing was lost.".trim(),
+                        "Try again",
+                    )
+                    else -> Triple(
+                        "Summaries can't be written yet",
+                        "The AI service isn't set up in this build of the app. Your thoughts are safe.",
+                        null,
+                    )
+                }
+                StateCard(title) {
+                    BodyText(text)
+                    if (action != null) RoseButton(action, ::write)
+                }
             }
         }
     }
@@ -198,27 +227,37 @@ fun BookSummaryScreen(
 /** Stands for "the summary has not been read from the phone yet". Never shown or saved. */
 private val NOT_READ: BookSummary? = BookSummary(bookId = Long.MIN_VALUE, json = "", thoughtCount = -1, createdAt = 0)
 
-/** The page before there is a summary: the book's name, a title, and whatever the state has to say. */
+/** The page before there is a summary: which book this is, and a card saying where things stand. */
 @Composable
-private fun Waiting(book: Book, title: String, content: @Composable () -> Unit) {
+private fun Waiting(book: Book, content: @Composable () -> Unit) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding).padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        MetaText(book.title)
-        TitleText(title)
-        Hairline(Modifier.padding(vertical = 8.dp))
+        BookLine(book, book.author.orEmpty())
         content()
         Spacer(Modifier.height(24.dp))
     }
 }
 
-/** Grey lines where the summary will be, so the page does not jump when it arrives. */
+/** A small cover and a line beside it: which book the page is about. */
+@Composable
+private fun BookLine(book: Book, detail: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        BookCover(book, Modifier.width(36.dp).aspectRatio(COVER_ASPECT), maxSidePx = 192)
+        SmallText(
+            if (detail.isEmpty()) book.title else "${book.title} · $detail",
+            Modifier.padding(start = 12.dp),
+        )
+    }
+}
+
+/** Tinted lines where the summary will be, so the page does not jump when it arrives. */
 @Composable
 private fun PlaceholderLines() {
     Column(Modifier.clearAndSetSemantics { }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        listOf(0.5f, 1f, 0.92f, 0.97f, 0.6f).forEach { width ->
-            Box(Modifier.fillMaxWidth(width).height(14.dp).clip(RoundedCornerShape(7.dp)).background(Palette.Hairline))
+        listOf(0.92f, 1f, 0.7f).forEach { width ->
+            Box(Modifier.fillMaxWidth(width).height(12.dp).clip(RoundedCornerShape(6.dp)).background(Palette.Blush.copy(alpha = 0.5f)))
         }
     }
 }
@@ -237,83 +276,83 @@ private fun SummaryPage(
 ) {
     val ticked = content.tickedPoints.size
     Column(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding)) {
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = ScreenPadding)
+                .padding(top = 8.dp),
+        ) {
             val count = summary?.thoughtCount ?: 0
-            MetaText(
-                "${book.title}. Written ${BookLabels.writtenOn(summary?.createdAt ?: 0)} from " +
-                    if (count == 1) "your 1 thought" else "all $count of your thoughts",
+            BookLine(
+                book,
+                "written ${BookLabels.writtenOn(summary?.createdAt ?: 0)} from your ${BookLabels.thoughts(count)}",
             )
             if (note != null) {
-                Column(Modifier.padding(top = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    MetaText(note.first, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-                    note.second?.let { QuietButton(it, onRetry) }
-                }
+                InlineAlert(
+                    note.first,
+                    Modifier.padding(top = 16.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    icon = LineIcons.Sparkle,
+                    actionLabel = note.second,
+                    onAction = note.second?.let { onRetry },
+                )
             }
-            TitleText(content.title, Modifier.padding(top = 8.dp))
+            HeadlineText(content.title, Modifier.padding(top = 16.dp))
 
             if (content.quote.isNotEmpty()) {
-                Text(
-                    "“${content.quote}”",
-                    style = AppType.Quote,
-                    color = Palette.Rose,
-                    modifier = Modifier.padding(top = 16.dp),
-                )
-                content.quotePage?.let { MetaText("You, on page $it", Modifier.padding(top = 6.dp)) }
+                TintCard(Modifier.padding(top = 20.dp)) {
+                    Text("“${content.quote}”", style = AppType.Quote, color = Palette.Ink)
+                    content.quotePage?.let { page ->
+                        Text(
+                            "YOU · PAGE $page",
+                            style = AppType.FrameNumber,
+                            color = Palette.Rose,
+                            modifier = Modifier.padding(top = 10.dp).semantics { contentDescription = "You, on page $page" },
+                        )
+                    }
+                }
             }
 
-            Hairline(Modifier.padding(top = 20.dp))
-            HeadingText("Your reading, in short", Modifier.padding(top = 20.dp))
+            HeadingText("Your reading, in short", Modifier.padding(top = 24.dp))
             BodyText(content.summary, Modifier.padding(top = 8.dp))
 
-            Hairline(Modifier.padding(top = 20.dp))
-            HeadingText("Points for your review", Modifier.padding(top = 20.dp))
-            MetaText("Tick the ones you'd use. Nothing is written for you.", Modifier.padding(top = 4.dp))
+            HeadingText("Points for your review", Modifier.padding(top = 24.dp))
+            MetaText("Pick the ones you want to write about.", Modifier.padding(top = 2.dp, bottom = 8.dp))
             content.points.forEachIndexed { index, point ->
+                Hairline()
                 PointRow(point, onTick = { onTick(index, it) })
-                if (index < content.points.lastIndex) Hairline()
             }
 
             if (content.gap.isNotEmpty()) {
-                val line = Palette.Muted
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(top = 20.dp)
-                        .drawBehind {
-                            drawRoundRect(
-                                color = line,
-                                cornerRadius = CornerRadius(14.dp.toPx()),
-                                style = Stroke(
-                                    width = 1.dp.toPx(),
-                                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx())),
-                                ),
-                            )
-                        }
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    MetaText("Something your notes don't cover yet")
-                    BodyText(content.gap)
+                Hairline()
+                Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Something your notes don't cover yet", style = AppType.TitleSmall, color = Palette.Ink)
+                    MetaText(content.gap, color = Palette.Ink)
                 }
             }
 
-            MetaText(
-                "Written from your own notes. The points are suggestions; the review is yours.",
-                Modifier.padding(top = 20.dp, bottom = 16.dp),
+            SmallText(
+                "Written only from your own notes. The points are suggestions; the review is yours.",
+                Modifier.padding(top = 12.dp, bottom = 24.dp),
             )
         }
 
-        Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp, bottom = 12.dp)) {
+        Hairline()
+        Row(
+            Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            QuietButton("Copy", onCopy, icon = LineIcons.Copy)
             RoseButton(
                 when (ticked) {
                     0 -> "Start my review"
-                    1 -> "Start my review with 1 point"
-                    else -> "Start my review with $ticked points"
+                    1 -> "Start with 1 point"
+                    else -> "Start with $ticked points"
                 },
                 onStartReview,
-                Modifier.fillMaxWidth(),
+                Modifier.weight(1f),
+                icon = LineIcons.Write,
             )
-            QuietButton("Copy the points", onCopy, Modifier.fillMaxWidth().padding(top = 8.dp))
         }
     }
 }
@@ -329,11 +368,11 @@ private fun PointRow(point: ReviewPoint, onTick: (Boolean) -> Unit) {
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        CheckMark(point.ticked)
-        Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(point.title, style = AppType.BodyStrong, color = Palette.Ink)
-            if (point.line.isNotEmpty()) BodyText(point.line)
-            MetaText(point.source)
+        CheckMark(point.ticked, Modifier.padding(top = 3.dp))
+        Column(Modifier.padding(start = 14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(point.title, style = AppType.Heading, color = Palette.Ink)
+            if (point.line.isNotEmpty()) MetaText(point.line, color = Palette.Ink)
+            SmallText(point.source)
         }
     }
 }

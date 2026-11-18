@@ -7,13 +7,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.contentDescription
+import com.onedayonesecond.data.BookThought
+import com.onedayonesecond.data.ThoughtType
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -27,11 +30,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.books.OpenLibrary
 import com.onedayonesecond.data.Book
@@ -39,8 +39,8 @@ import com.onedayonesecond.data.BookRules
 import com.onedayonesecond.ui.common.rememberJournalImage
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.TileShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -53,14 +53,25 @@ import java.util.Locale
 /** Covers are drawn 2:3, the shape of most paperbacks. */
 const val COVER_ASPECT = 2f / 3f
 
-/** The current page on the book page: 44 sp, as the day number is the day page's one big figure. */
-val BigPage: TextStyle = AppType.BigDate.copy(fontSize = 44.sp, lineHeight = 46.sp, letterSpacing = (-1.6).sp)
-
-/** The page number beside each thought. */
-val ThoughtPage: TextStyle = AppType.Heading.copy(fontSize = 22.sp, lineHeight = 26.sp, letterSpacing = (-0.4).sp)
-
-/** The page field on "Log a thought". */
-val PageField: TextStyle = AppType.BigDate.copy(fontSize = 36.sp, lineHeight = 40.sp, letterSpacing = (-1.2).sp)
+/**
+ * Where the bookmark is, as a measurement: "p.214" in ink, then "/ 379" in muted when
+ * the page count is known. Read aloud it is "Page 214 of 379".
+ */
+@Composable
+fun PageCount(book: Book, modifier: Modifier = Modifier, style: TextStyle = AppType.Timecode) {
+    val total = book.totalPages?.takeIf { it > 0 }
+    Row(
+        modifier.clearAndSetSemantics {
+            contentDescription = if (total != null) "Page ${book.currentPage} of $total" else "Page ${book.currentPage}"
+        },
+        verticalAlignment = Alignment.Bottom,
+    ) {
+        Text("p.${book.currentPage}", style = style, color = Palette.Ink)
+        if (total != null) {
+            Text(" / $total", style = AppType.Timecode, color = Palette.Muted, modifier = Modifier.padding(start = 2.dp, bottom = 1.dp))
+        }
+    }
+}
 
 /**
  * A book's cover, or its title printed on a blush cover when it has none. The cover
@@ -96,9 +107,13 @@ fun RemoteCover(title: String, url: String?, isbn: String?, modifier: Modifier =
 
 @Composable
 private fun CoverBox(title: String, image: ImageBitmap?, modifier: Modifier) {
+    // A cover is one of the few things in the app that casts a shadow: it is an object on the paper.
     BoxWithConstraints(
-        modifier.clip(TileShape).background(Palette.Blush).clearAndSetSemantics { },
-        contentAlignment = Alignment.Center,
+        modifier
+            .shadow(1.dp, Corners.Frame, ambientColor = Palette.Ink, spotColor = Palette.Ink)
+            .clip(Corners.Frame)
+            .background(Palette.Blush)
+            .clearAndSetSemantics { },
     ) {
         if (image != null) {
             Image(image, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -106,23 +121,13 @@ private fun CoverBox(title: String, image: ImageBitmap?, modifier: Modifier) {
             val small = maxWidth < 90.dp
             Text(
                 title,
-                style = if (small) AppType.Tab else AppType.Heading,
+                style = if (small) AppType.LabelSmall else AppType.TitleSmall,
                 color = Palette.Ink,
-                textAlign = TextAlign.Center,
-                maxLines = if (small) 4 else 6,
+                maxLines = if (small) 5 else 7,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(if (small) 5.dp else 12.dp),
+                modifier = Modifier.padding(if (small) 6.dp else 10.dp),
             )
         }
-    }
-}
-
-/** A 4 dp bar showing how far the bookmark is through the book. */
-@Composable
-fun ProgressLine(progress: Float, modifier: Modifier = Modifier, height: Dp = 4.dp) {
-    val shape = RoundedCornerShape(50)
-    Box(modifier.fillMaxWidth().height(height).clip(shape).background(Palette.Hairline).clearAndSetSemantics { }) {
-        Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).height(height).clip(shape).background(Palette.Rose))
     }
 }
 
@@ -132,17 +137,17 @@ fun ProgressLine(progress: Float, modifier: Modifier = Modifier, height: Dp = 4.
  */
 @Composable
 fun CheckMark(checked: Boolean, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(6.dp)
+    val shape = RoundedCornerShape(4.dp)
     Box(
         modifier
-            .size(24.dp)
+            .size(18.dp)
             .clip(shape)
             .background(if (checked) Palette.Rose else Palette.Paper)
-            .border(1.5.dp, if (checked) Palette.Rose else Palette.Muted, shape)
+            .border(2.dp, if (checked) Palette.Rose else Palette.Muted, shape)
             .clearAndSetSemantics { },
         contentAlignment = Alignment.Center,
     ) {
-        if (checked) Icon(LineIcons.Check, contentDescription = null, tint = Palette.Paper, modifier = Modifier.size(18.dp))
+        if (checked) Icon(LineIcons.Check, contentDescription = null, tint = Palette.Paper, modifier = Modifier.size(14.dp))
     }
 }
 
@@ -152,6 +157,19 @@ object BookLabels {
     private val dayMonth = DateTimeFormatter.ofPattern("d MMMM", locale)
     private val dayMonthYear = DateTimeFormatter.ofPattern("d MMMM yyyy", locale)
     private val clock = DateTimeFormatter.ofPattern("HH:mm", locale)
+    private val weekdayDayMonth = DateTimeFormatter.ofPattern("EEEE, d MMMM", locale)
+    private val weekdayDayMonthYear = DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy", locale)
+
+    /** "Thursday, 12 November · voice note": the day a thought was logged, and what kind it is when not written. */
+    fun logged(thought: BookThought, zone: ZoneId = ZoneId.systemDefault()): String {
+        val date = Instant.ofEpochMilli(thought.createdAt).atZone(zone).toLocalDate()
+        val day = date.format(if (date.year == LocalDate.now().year) weekdayDayMonth else weekdayDayMonthYear)
+        return when (thought.type) {
+            ThoughtType.VOICE -> "$day \u00B7 voice note"
+            ThoughtType.PAGE_PHOTO -> "$day \u00B7 with a photo"
+            ThoughtType.WRITTEN -> day
+        }
+    }
 
     /** "2 November", with the year once it is not this year. */
     fun day(date: LocalDate, today: LocalDate = LocalDate.now()): String =
@@ -177,7 +195,7 @@ object BookLabels {
         return when {
             needed == 1 -> "Needs one more thought"
             needed > 1 -> "Needs $needed more thoughts"
-            else -> "Written from your ${thoughts(thoughtsWithWords)} so far"
+            else -> "From your ${thoughts(thoughtsWithWords)} so far"
         }
     }
 }

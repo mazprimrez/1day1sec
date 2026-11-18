@@ -1,5 +1,6 @@
 package com.onedayonesecond
 
+import kotlinx.coroutines.flow.first
 import android.content.Context
 import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.backup.DriveAuth
@@ -62,7 +63,7 @@ class AppContainer(context: Context) {
     val pendingBookRemovals by lazy { PendingBookRemovals(appContext) }
     val books by lazy { BookRepository(database.bookDao(), storage, pendingBookRemovals) }
     val journalPrefs by lazy { JournalPrefs(appContext) }
-    val places by lazy { PlaceFinder(appContext) }
+    val places by lazy { PlaceFinder(appContext) { journalPrefs.tagPlaces.first() } }
     val backendAuth by lazy { BackendAuth(appContext) }
     val ai: JournalAi by lazy { BackendJournalAi(BuildConfig.JOURNAL_BACKEND_URL, backendAuth) }
     val entryProcessor by lazy { EntryProcessor(journal, ai) }

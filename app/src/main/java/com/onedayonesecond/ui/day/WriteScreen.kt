@@ -12,6 +12,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.TextAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -38,12 +43,9 @@ import com.onedayonesecond.ui.theme.AppDialog
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BackBar
 import com.onedayonesecond.ui.theme.BodyText
-import com.onedayonesecond.ui.theme.MetaText
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -108,17 +110,26 @@ fun WriteScreen(
 
     val isToday = date == LocalDate.now()
     Column(Modifier.fillMaxSize().imePadding()) {
-        BackBar(::leave, backLabel = "Back without saving")
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding)) {
-            TitleText(
-                when {
-                    editing != null && editing?.type != EntryType.WRITTEN -> "Correct the words"
-                    editing != null -> "Edit"
-                    isToday -> "Write about today"
-                    else -> "Write about this day"
-                },
+        BackBar(
+            ::leave,
+            backLabel = "Close without saving",
+            title = when {
+                editing != null && editing?.type != EntryType.WRITTEN -> "Correct the words"
+                editing != null -> "Edit"
+                isToday -> "Write about today"
+                else -> "Write about this day"
+            },
+            backIcon = LineIcons.Close,
+        ) {
+            TextAction(
+                if (saving) "Saving…" else "Save",
+                ::save,
+                // An existing entry may be saved empty-handed only if it has media to stand on.
+                enabled = loaded && !saving && (text.isNotBlank() || (editing != null && editing?.type != EntryType.WRITTEN)),
             )
-            MetaText(RecapLabels.fullDate(date), Modifier.padding(top = 2.dp, bottom = 16.dp))
+        }
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding)) {
+            SmallText(RecapLabels.fullDate(date), Modifier.padding(top = 4.dp, bottom = 16.dp))
             Box(Modifier.fillMaxWidth()) {
                 if (text.isEmpty()) {
                     BodyText(if (isToday) "What happened today?" else "What happened that day?", color = Palette.Muted)
@@ -135,14 +146,8 @@ fun WriteScreen(
                         .semantics { contentDescription = "Your writing" },
                 )
             }
+            Spacer(Modifier.height(24.dp))
         }
-        RoseButton(
-            if (saving) "Saving…" else "Save",
-            ::save,
-            Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 12.dp),
-            // An existing entry may be saved empty-handed only if it has media to stand on.
-            enabled = loaded && !saving && (text.isNotBlank() || (editing != null && editing?.type != EntryType.WRITTEN)),
-        )
     }
 
     if (confirmLeave) {
@@ -150,8 +155,8 @@ fun WriteScreen(
             onDismiss = { confirmLeave = false },
             title = "Leave without saving?",
             buttons = {
-                QuietButton("Leave", { confirmLeave = false; onBack() }, Modifier.weight(1f))
-                RoseButton("Keep writing", { confirmLeave = false }, Modifier.weight(1f))
+                TextAction("Leave", { confirmLeave = false; onBack() })
+                RoseButton("Keep writing", { confirmLeave = false })
             },
         ) {
             Text("What you wrote here hasn't been saved yet.", style = AppType.Body, color = Palette.Ink)

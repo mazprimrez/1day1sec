@@ -13,6 +13,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.sp
+import com.onedayonesecond.ui.theme.InlineAlert
+import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.TextAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,13 +48,10 @@ import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.journal.RecapLabels
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BackBar
-import com.onedayonesecond.ui.theme.BodyText
 import com.onedayonesecond.ui.theme.MetaText
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -194,59 +202,73 @@ fun VoiceScreen(date: LocalDate, onDone: () -> Unit, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack, backLabel = if (recording) "Back and discard the recording" else "Back")
+        BackBar(
+            onBack,
+            backLabel = if (recording) "Back and discard the recording" else "Back",
+            title = "Voice note",
+        )
         Column(Modifier.weight(1f).padding(horizontal = ScreenPadding)) {
-            TitleText("Voice note")
-            MetaText(RecapLabels.fullDate(date), Modifier.padding(top = 2.dp))
+            SmallText(RecapLabels.fullDate(date), Modifier.padding(top = 4.dp))
 
             Column(
                 Modifier.fillMaxWidth().weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Text(
-                    formatClock(elapsedMs),
-                    style = AppType.BigDate,
-                    color = if (recording) Palette.Ink else Palette.Muted,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (recording) {
+                        Box(Modifier.padding(end = 12.dp).size(10.dp).clip(CircleShape).background(Palette.Rose))
+                    }
+                    Text(
+                        formatClock(elapsedMs),
+                        style = AppType.NumeralLarge.copy(fontSize = 36.sp, lineHeight = 44.sp),
+                        color = if (recording) Palette.Ink else Palette.Muted,
+                    )
+                }
                 MetaText(
                     when {
                         saving -> "Saving…"
                         recording -> "Recording. Up to ${MAX_VOICE_MS / 60_000} minutes."
-                        else -> "Say what's on your mind. It's written out for you afterwards."
+                        else -> "Say what's on your mind. It's typed out for you afterwards."
                     },
                     Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
                 )
             }
 
             problem?.let {
-                BodyText(it, Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Polite })
+                InlineAlert(
+                    it,
+                    Modifier.padding(bottom = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    icon = LineIcons.Warning,
+                )
             }
         }
 
         Column(
-            Modifier.padding(horizontal = ScreenPadding, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             when {
                 recording -> {
-                    RoseButton("Finish and save", ::finish, Modifier.fillMaxWidth())
-                    QuietButton(
+                    RoseButton("Finish and save", ::finish, Modifier.fillMaxWidth(), icon = LineIcons.Check)
+                    TextAction(
                         "Discard",
                         {
                             recording = false
                             recorder.discard()
                             elapsedMs = 0
                         },
-                        Modifier.fillMaxWidth(),
+                        color = Palette.Ink,
                     )
                 }
                 !micAllowed -> RoseButton(
                     "Allow the microphone",
                     { permission.launch(Manifest.permission.RECORD_AUDIO) },
                     Modifier.fillMaxWidth(),
+                    icon = LineIcons.Mic,
                 )
-                else -> RoseButton("Start recording", ::start, Modifier.fillMaxWidth(), enabled = !saving)
+                else -> RoseButton("Start recording", ::start, Modifier.fillMaxWidth(), enabled = !saving, icon = LineIcons.Mic)
             }
         }
     }
