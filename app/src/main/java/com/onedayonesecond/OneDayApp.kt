@@ -2,6 +2,7 @@ package com.onedayonesecond
 
 import android.app.Application
 import androidx.media3.common.util.UnstableApi
+import com.onedayonesecond.work.BookWork
 import com.onedayonesecond.work.JournalWork
 import com.onedayonesecond.work.Reminders
 import kotlinx.coroutines.launch
@@ -27,7 +28,11 @@ class OneDayApp : Application() {
             // Seconds deleted more than thirty days ago leave the trash for good.
             container.repository.purgeDeleted()
             // Voice notes and pages saved while offline get another go.
-            if (container.journal.unprocessedEntries().isNotEmpty()) JournalWork.typeOutWhenOnline(this@OneDayApp)
+            if (container.journal.unprocessedEntries().isNotEmpty() || container.books.unprocessedThoughts().isNotEmpty()) {
+                JournalWork.typeOutWhenOnline(this@OneDayApp)
+            }
+            // Books added by hand or offline still waiting for a cover get another go.
+            if (container.books.booksMissingCover().isNotEmpty()) BookWork.fetchCoversWhenOnline(this@OneDayApp)
         }
     }
 }

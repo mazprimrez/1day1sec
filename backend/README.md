@@ -1,8 +1,9 @@
 # Journal backend
 
 A small FastAPI service for Cloud Run. It sits between the app and Gemini on Vertex AI
-and does three things: types out voice notes, types out notebook and pen pages, and
-writes the weekly, monthly and yearly recaps. What the app sends and gets back is in
+and does four things: types out voice notes, types out notebook and pen pages, writes
+the weekly, monthly and yearly recaps, and writes a book's summary and review ideas
+from the thoughts logged while reading it. What the app sends and gets back is in
 [docs/JOURNAL_BACKEND.md](../docs/JOURNAL_BACKEND.md).
 
 | Path | What lives there |
@@ -13,14 +14,16 @@ writes the weekly, monthly and yearly recaps. What the app sends and gets back i
 | `app/transcription.py` | `transcribe(audio, mime_type)`: the only place that knows who transcribes |
 | `app/extraction.py` | Page image to text |
 | `app/recap.py` | Recap request, reply shape and the quote check |
+| `app/book_recap.py` | Book summary request, reply shape, and the checks on the quote and the points |
 | `prompts/recap.md` | The recap prompt. Edit it and redeploy; no code changes |
-| `tests/samples/` | A sample week, month and year of entries |
+| `prompts/book_recap.md` | The book summary prompt. The same |
+| `tests/samples/` | A sample week, month and year of entries, and a sample book with its thoughts |
 
 ## Settings
 
 | Variable | Needed | What it is |
 | --- | --- | --- |
-| `GEMINI_MODEL` | no | The model for all three endpoints. Default `gemini-3.5-flash-lite` |
+| `GEMINI_MODEL` | no | The model for every endpoint. Default `gemini-3.5-flash-lite` |
 | `ALLOWED_EMAIL` | yes | The one Google account that may use the service |
 | `GOOGLE_CLIENT_ID` | yes | The OAuth client ID the app's Google tokens are issued to: the app's Android client. Several can be given, separated by commas |
 | `GOOGLE_CLOUD_PROJECT` | yes | The project whose Vertex AI is called |

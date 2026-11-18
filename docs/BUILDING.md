@@ -18,5 +18,7 @@ Two things need setting up outside the code before every feature works:
 
 - Google Drive backup: the one-time Google Cloud setup in
   [DRIVE_BACKUP.md](DRIVE_BACKUP.md).
-- Typing out and recaps: the backend's address in `local.properties`, see
-  [JOURNAL_BACKEND.md](JOURNAL_BACKEND.md).
+- Typing out, recaps and book summaries: the backend's address in
+  `local.properties`, see [JOURNAL_BACKEND.md](JOURNAL_BACKEND.md).
+
+Book search needs no setup: it asks Open Library, which is free and needs no key.

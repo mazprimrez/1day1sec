@@ -111,6 +111,7 @@ dependencies {
 
     implementation(libs.play.services.auth)
     implementation(libs.play.services.location)
+    implementation(libs.mlkit.barcode.scanning)
 
     testImplementation(libs.junit)
     testImplementation(libs.org.json)

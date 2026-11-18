@@ -58,11 +58,13 @@ fun WriteScreen(
     entryId: Long,
     onDone: () -> Unit,
     onBack: () -> Unit,
+    /** Words to start a new entry from: the review draft made from a book's summary. */
+    seed: String = "",
 ) {
     val context = LocalContext.current
     val container = remember { (context.applicationContext as OneDayApp).container }
 
-    var text by rememberSaveable { mutableStateOf("") }
+    var text by rememberSaveable { mutableStateOf(seed) }
     var original by rememberSaveable { mutableStateOf("") }
     var loaded by rememberSaveable { mutableStateOf(entryId == Routes.NO_ENTRY) }
     var editing by remember { mutableStateOf<Entry?>(null) }

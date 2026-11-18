@@ -16,6 +16,7 @@ work = "2.10.0"
 datastore = "1.1.1"
 playServicesAuth = "21.6.0"
 playServicesLocation = "21.3.0"
+mlkitBarcode = "17.3.0"
 
 guava = "33.3.1-android"
 junit = "4.13.2"
@@ -67,6 +68,11 @@ play-services-auth = { group = "com.google.android.gms", name = "play-services-a
 # Where an entry was written: one fused-location fix per entry, turned into a short
 # place name on the phone. Only asked for when the user first adds something.
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
+
+# Reading the ISBN barcode on a book's back cover. The model is bundled in the app
+# (about 2.5 MB), so scanning works offline and from the first launch; frames come from
+# the CameraX already used for recording.
+mlkit-barcode-scanning = { group = "com.google.mlkit", name = "barcode-scanning", version.ref = "mlkitBarcode" }
 
 # Media3's Effects API takes Guava ImmutableList directly, so it is declared
 # explicitly rather than relied on as a transitive of media3-common.

@@ -111,7 +111,7 @@ class JournalActions(
      * longest side is at most [MAX_PHOTO_SIDE]: plenty to read a page from, and small
      * enough to back up in one request.
      */
-    private suspend fun importPhoto(uri: Uri): File? = withContext(Dispatchers.IO) {
+    suspend fun importPhoto(uri: Uri): File? = withContext(Dispatchers.IO) {
         val resolver = appContext.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }

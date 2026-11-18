@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -77,6 +78,8 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import com.onedayonesecond.data.DiaryThought
+import com.onedayonesecond.ui.books.ThoughtBody
 import java.time.format.TextStyle
 import java.util.Locale
 
@@ -84,13 +87,36 @@ import java.util.Locale
 private sealed interface EntryRow {
     val key: Long
 
+    /** When it happened, which is what the page is ordered by. */
+    val at: Long
+
     data class Single(val entry: Entry) : EntryRow {
         override val key get() = entry.id
+        override val at get() = entry.createdAt
     }
 
     data class Photos(val photos: List<Entry>) : EntryRow {
         override val key get() = photos.first().id
+        override val at get() = photos.first().createdAt
     }
+
+    /**
+     * A thought logged on a book, shown here because it was logged on this day. It is
+     * not an entry: it lives with its book, and this row is a way back to it.
+     */
+    data class Thought(val diary: DiaryThought) : EntryRow {
+        // Entries and thoughts are numbered separately; the sign keeps their keys apart.
+        override val key get() = -diary.thought.id
+        override val at get() = diary.thought.createdAt
+    }
+}
+
+/** The day's entries and its book thoughts, in the order they happened. */
+private fun rowsOf(entries: List<Entry>, thoughts: List<DiaryThought>): List<EntryRow> {
+    val rows = rowsOf(entries)
+    if (thoughts.isEmpty()) return rows
+    // A stable sort: entries made at the same moment keep the order they already had.
+    return (rows + thoughts.map { EntryRow.Thought(it) }).sortedBy { it.at }
 }
 
 private fun rowsOf(entries: List<Entry>): List<EntryRow> {
@@ -125,6 +151,7 @@ fun DayScreen(
     onVoice: (LocalDate) -> Unit,
     onDraw: (LocalDate) -> Unit,
     onMoved: (LocalDate) -> Unit,
+    onOpenBook: (Long) -> Unit,
     viewModel: DayViewModel = viewModel(factory = DayViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -145,7 +172,7 @@ fun DayScreen(
     LaunchedEffect(movedTo) { movedTo?.let(onMoved) }
 
     val voice = rememberVoicePlayback()
-    val rows = remember(state.entries) { rowsOf(state.entries) }
+    val rows = remember(state.entries, state.thoughts) { rowsOf(state.entries, state.thoughts) }
 
     Column(Modifier.fillMaxSize()) {
         BackBar(onBack, backLabel = "Back to the calendar") {
@@ -225,6 +252,14 @@ fun DayScreen(
                     is EntryRow.Photos -> PhotosItem(
                         photos = row.photos,
                         onOptions = { entryOptions = it },
+                        onView = { viewing = it },
+                    )
+                    is EntryRow.Thought -> ThoughtItem(
+                        diary = row.diary,
+                        canTypeOut = state.canTypeOut,
+                        voice = voice,
+                        onOpenBook = { onOpenBook(row.diary.thought.bookId) },
+                        onRetry = { viewModel.retry(row.diary.thought) },
                         onView = { viewing = it },
                     )
                 }
@@ -513,6 +548,42 @@ private fun EntryMeta(text: String, onOptions: () -> Unit, optionsLabel: String)
     }
 }
 
+/**
+ * A thought from a book: "21:10, from Laut Bercerita, page 214", which opens the book,
+ * then the thought as it is shown there. It is changed or deleted on the book's page.
+ */
+@Composable
+private fun ThoughtItem(
+    diary: DiaryThought,
+    canTypeOut: Boolean,
+    voice: VoicePlayback,
+    onOpenBook: () -> Unit,
+    onRetry: () -> Unit,
+    onView: (File) -> Unit,
+) {
+    val thought = diary.thought
+    val time = Instant.ofEpochMilli(thought.createdAt).atZone(ZoneId.systemDefault()).format(ClockTime)
+    Column(Modifier.padding(start = ScreenPadding, end = ScreenPadding, top = 4.dp, bottom = 16.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .clickable(onClickLabel = "Open the book", role = Role.Button, onClick = onOpenBook),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            MetaText("$time, from ${diary.bookTitle}, page ${thought.page}", Modifier.weight(1f))
+            Icon(
+                LineIcons.ChevronRight,
+                contentDescription = null,
+                tint = Palette.Muted,
+                modifier = Modifier.padding(start = 8.dp).size(20.dp),
+            )
+        }
+        // The sign keeps this voice note's "playing" state apart from an entry with the same number.
+        ThoughtBody(thought, voice, voiceId = -thought.id, canTypeOut = canTypeOut, onRetry = onRetry, onView = onView)
+    }
+}
+
 @Composable
 private fun EntryItem(
     entry: Entry,
@@ -534,7 +605,7 @@ private fun EntryItem(
 
         Column(Modifier.padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             when (entry.type) {
-                EntryType.VOICE -> VoiceRow(entry, voice)
+                EntryType.VOICE -> VoiceChip(entry.id, entry.mediaFile, voice)
                 EntryType.NOTEBOOK_PHOTO, EntryType.PEN -> entry.mediaFile?.let { file ->
                     JournalImage(
                         file = file,
@@ -590,18 +661,21 @@ private fun ProcessingNote(entry: Entry, canTypeOut: Boolean, onRetry: () -> Uni
     }
 }
 
+/**
+ * A voice note as a small play button with its length. [id] tells this note from the
+ * others on the page, so only the one that is playing shows as playing.
+ */
 @Composable
-private fun VoiceRow(entry: Entry, voice: VoicePlayback) {
-    val file = entry.mediaFile
+fun VoiceChip(id: Long, file: File?, voice: VoicePlayback) {
     val duration by produceState(0L, file?.absolutePath) {
         value = file?.let { VideoMetadata.durationMs(it) } ?: 0L
     }
-    val playing = voice.playingId == entry.id
+    val playing = voice.playingId == id
     Row(
         Modifier
             .clip(TileShape)
             .border(1.dp, Palette.Hairline, TileShape)
-            .clickable(enabled = file != null, role = Role.Button) { file?.let { voice.toggle(entry.id, it) } }
+            .clickable(enabled = file != null, role = Role.Button) { file?.let { voice.toggle(id, it) } }
             .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -703,7 +777,7 @@ class VoicePlayback {
 }
 
 @Composable
-private fun rememberVoicePlayback(): VoicePlayback {
+fun rememberVoicePlayback(): VoicePlayback {
     val playback = remember { VoicePlayback() }
     DisposableEffect(Unit) { onDispose { playback.stop() } }
     // Leaving the app should not leave a voice note talking.

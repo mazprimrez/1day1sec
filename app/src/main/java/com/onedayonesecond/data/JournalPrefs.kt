@@ -20,6 +20,16 @@ enum class RecapFailureReason { OFFLINE, FAILED, NOT_SET_UP }
 
 data class RecapFailure(val reason: RecapFailureReason, val at: Long)
 
+/** A thought that was being written when "Log a thought" was closed, kept for next time. */
+data class ThoughtDraft(
+    val page: Int,
+    val text: String,
+    val showInDiary: Boolean,
+    /** A voice note or page photo already attached. Scratch files do not outlive the app, so it may be gone. */
+    val mediaPath: String? = null,
+    val mediaType: ThoughtType? = null,
+)
+
 /** Small things the journal remembers: the name letters are addressed to, and failed recaps. */
 class JournalPrefs(context: Context) {
 
@@ -59,8 +69,43 @@ class JournalPrefs(context: Context) {
         dataStore.edit { if (failure == null) it.remove(key) else it[key] = "${failure.reason.name}|${failure.at}" }
     }
 
+    /** The draft kept for a book, or null. One per book, so switching books does not lose either. */
+    suspend fun thoughtDraft(bookId: Long): ThoughtDraft? {
+        val stored = safeData.first()[stringPreferencesKey(DRAFT_PREFIX + bookId)] ?: return null
+        return try {
+            val json = org.json.JSONObject(stored)
+            ThoughtDraft(
+                page = json.optInt("page", 1),
+                text = json.optString("text"),
+                showInDiary = json.optBoolean("showInDiary", true),
+                mediaPath = json.optString("mediaPath").ifEmpty { null },
+                mediaType = ThoughtType.entries.firstOrNull { it.name == json.optString("mediaType") },
+            )
+        } catch (e: org.json.JSONException) {
+            null
+        }
+    }
+
+    suspend fun setThoughtDraft(bookId: Long, draft: ThoughtDraft?) {
+        val key = stringPreferencesKey(DRAFT_PREFIX + bookId)
+        dataStore.edit {
+            if (draft == null) {
+                it.remove(key)
+            } else {
+                it[key] = org.json.JSONObject()
+                    .put("page", draft.page)
+                    .put("text", draft.text)
+                    .put("showInDiary", draft.showInDiary)
+                    .put("mediaPath", draft.mediaPath.orEmpty())
+                    .put("mediaType", draft.mediaType?.name.orEmpty())
+                    .toString()
+            }
+        }
+    }
+
     companion object {
         const val MAX_NAME_LENGTH = 40
+        private const val DRAFT_PREFIX = "thought_draft_"
         private val NAME = stringPreferencesKey("name")
         private val LOCATION_ASKED = booleanPreferencesKey("location_asked")
         private const val FAILURE_PREFIX = "recap_failure_"

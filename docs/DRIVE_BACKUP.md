@@ -34,12 +34,17 @@ Kilasan/
     2026-11-02.mp4
     recap-week-2026-11-02.json
     recap-month-2026-11.json
+  books/
+    2026-11-02-laut-bercerita-7k2q.json                the book and its thoughts
+    2026-11-02-laut-bercerita-7k2q.jpg                 its cover
+    2026-11-02-laut-bercerita-7k2q-1793500000000.m4a   a thought's voice note or page photo
   recap-year-2026.json
   captions.json
 ```
 
 `captions.json` holds the captions the user wrote for their clips (see below).
-The journal files are described under "The journal" further down.
+The journal files are described under "The journal" further down, and the books
+under "Books".
 
 The day is always read from the file name, never from the folder, so a file that
 ends up in the wrong folder is still restored to the right day. The layout lives
@@ -131,6 +136,49 @@ out comes back still waiting, and is typed out once the phone is online.
 The file formats and the merge are in `backup/JournalFile.kt`, unit-tested
 (`JournalFileTest`). As with the clips, the real calls to Drive have not been tested
 against a live account.
+
+## Books
+
+Books, the thoughts logged on them and their covers are backed up with everything
+else, in one folder of their own beside the month folders:
+
+- **`<key>.json`**, one per book: its title, author, ISBN, edition, page count,
+  where the bookmark is, whether it is finished, the days it was started and
+  finished, and each thought with its page, the moment it was logged, its kind, its
+  words, whether it shows in the diary, and the name of its media file if it has one.
+- **`<key>.jpg`**, the cover, if the book has one.
+- **`<key>-<moment>.m4a` or `.jpg`**, a thought's voice note or photo of the page.
+
+The **key** is made when the book is added: the day it was started, its title in
+plain letters, and four random letters (`2026-11-02-laut-bercerita-7k2q`). It never
+changes afterwards, so correcting a title does not orphan the files, and two copies
+of one book started on the same day stay apart.
+
+A book goes up the same way a day's journal does. The cover and the media go first,
+then the file that refers to them. Each is compared by checksum and only uploaded
+when it changed. The book's file is a **merge**: a thought that is in Drive but not
+on the phone is kept, a thought on both is taken from the phone (a thought is known
+by the moment it was logged, so one whose page was corrected replaces its old copy),
+and the book's details are the phone's. So a thought **deleted** on the phone stays in Drive, as a
+deleted entry does.
+
+A **removed book** is different. Removing a book on the phone is remembered, and
+the next backup takes its file, its cover and its thoughts' media out of Drive, so
+that a later restore does not bring it back. Only files named with exactly that
+book's key are touched.
+
+The "Summary and review ideas" page is not backed up. It is written from the
+thoughts, and is written again when it is next opened.
+
+**Restore** brings back every book that is in Drive and not on the phone, with its
+cover and its thoughts. A book already on the phone is left exactly as it is, and a
+book removed on this phone since the last backup stays removed. A thought whose
+media is missing from Drive comes back with its words if it has any. A voice note
+that was backed up before its words were typed out comes back still waiting.
+
+The file format and the merge are in `backup/BookFile.kt`, and the names in
+`backup/DriveLayout.kt`; both are unit-tested (`BookFileTest`). As with the clips,
+the real calls to Drive have not been tested against a live account.
 
 ## When the connection drops
 
@@ -258,5 +306,7 @@ Installing the app on a *new phone* from the same computer does not change it.
 | `backup/DriveAuth.kt` | Authorization API: consent screen + access token |
 | `backup/DriveApi.kt` | The Drive v3 HTTPS calls (no Google client library) |
 | `backup/DriveLayout.kt` | Folder and file naming; pure, unit-tested |
+| `backup/JournalFile.kt` | A day's journal file and its merge; pure, unit-tested |
+| `backup/BookFile.kt` | A book's file and its merge; pure, unit-tested |
 | `backup/DriveBackup.kt` | Backup and restore algorithms above |
 | `ui/backup/` | Screen and ViewModel |

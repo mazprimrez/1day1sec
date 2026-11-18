@@ -4,8 +4,8 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-# The model behind /transcribe, /extract-text and /recap. Set GEMINI_MODEL to change it
-# for all three; this default is the only place the name is written in code.
+# The model behind /transcribe, /extract-text, /recap and /book-recap. Set GEMINI_MODEL to
+# change it for all of them; this default is the only place the name is written in code.
 DEFAULT_MODEL = "gemini-3.5-flash-lite"
 
 
