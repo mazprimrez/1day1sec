@@ -11,8 +11,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.shadow
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -95,11 +97,15 @@ fun MessageBar(
         onDismiss()
     }
 
+    // With one thing to do, it sits at the end of the line. With two, they go on a
+    // line of their own and the message can be closed by hand.
+    val single = message.actions.singleOrNull()
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .shadow(6.dp, Corners.Field, ambientColor = Palette.Ink, spotColor = Palette.Ink)
+            .clip(Corners.Field)
             .background(Palette.Ink)
             .onFocusChanged { focused = it.hasFocus }
             .pointerInput(message.id) {
@@ -110,44 +116,52 @@ fun MessageBar(
                     }
                 }
             }
-            .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            .padding(start = 16.dp, end = 8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.defaultMinSize(minHeight = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 message.text,
-                style = AppType.Body,
+                style = AppType.Meta,
                 color = Palette.Paper,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(vertical = 10.dp)
+                    .padding(vertical = 14.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite },
             )
-            IconAction(LineIcons.Close, "Close this message", onDismiss, tint = Palette.Paper)
-        }
-        if (message.actions.isNotEmpty()) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(bottom = 4.dp),
-            ) {
-                message.actions.forEach { action ->
-                    Text(
-                        action.label,
-                        style = AppType.BodyStrong,
-                        color = Palette.Blush,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = androidx.compose.material3.ripple(color = Palette.Blush),
-                                role = Role.Button,
-                                onClick = { onAction(action) },
-                            )
-                            .defaultMinSize(minHeight = 48.dp)
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                    )
-                }
+            when {
+                single != null -> MessageButton(single.label) { onAction(single) }
+                message.actions.isNotEmpty() ->
+                    IconAction(LineIcons.Close, "Close this message", onDismiss, tint = Palette.Paper)
             }
         }
+        if (message.actions.size > 1) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier.padding(bottom = 4.dp).offset(x = (-12).dp),
+            ) {
+                message.actions.forEach { action -> MessageButton(action.label) { onAction(action) } }
+            }
+        }
+    }
+}
+
+/** A thing to do about a message, in blush on the dark bar. */
+@Composable
+private fun MessageButton(label: String, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(Corners.Button)
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = androidx.compose.material3.ripple(color = Palette.Blush),
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(label, style = AppType.Label, color = Palette.Blush)
     }
 }
 

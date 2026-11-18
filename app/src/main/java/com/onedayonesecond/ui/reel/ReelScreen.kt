@@ -1,28 +1,42 @@
 package com.onedayonesecond.ui.reel
 
-import android.app.Activity
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
+import com.onedayonesecond.ui.theme.Stat
+import com.onedayonesecond.ui.backup.BackupLabels
+import com.onedayonesecond.ui.compile.PREVIEW_WIDTH
+import com.onedayonesecond.ui.theme.IconAction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import com.onedayonesecond.journal.RecapLabels
+import com.onedayonesecond.ui.theme.ContactFrame
+import com.onedayonesecond.ui.theme.Corners
+import com.onedayonesecond.ui.theme.FabClearance
+import com.onedayonesecond.ui.theme.FloatingAction
+import com.onedayonesecond.ui.theme.FrameKind
+import com.onedayonesecond.ui.theme.InlineAlert
+import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.ProgressLine
+import com.onedayonesecond.ui.theme.Segmented
+import com.onedayonesecond.ui.theme.TabHeader
+import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -34,18 +48,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.common.util.UnstableApi
-import com.onedayonesecond.ui.backup.BackupAction
 import com.onedayonesecond.ui.backup.BackupPhase
-import com.onedayonesecond.ui.backup.BackupUiState
 import com.onedayonesecond.ui.backup.BackupViewModel
 import com.onedayonesecond.ui.common.CLIP_ASPECT
 import com.onedayonesecond.ui.common.ClipPlayer
@@ -53,53 +63,37 @@ import com.onedayonesecond.ui.common.ClipStill
 import com.onedayonesecond.ui.compile.CompilePhase
 import com.onedayonesecond.ui.compile.CompileUiState
 import com.onedayonesecond.ui.compile.CompileViewModel
-import com.onedayonesecond.ui.compile.DateStyleDialog
 import com.onedayonesecond.ui.compile.RangeOption
 import com.onedayonesecond.ui.theme.ActionRow
 import com.onedayonesecond.ui.theme.AppType
-import com.onedayonesecond.ui.theme.BodyText
 import com.onedayonesecond.ui.theme.Chip
-import com.onedayonesecond.ui.theme.Hairline
-import com.onedayonesecond.ui.theme.HeadingText
 import com.onedayonesecond.ui.theme.MediaPlaceholder
 import com.onedayonesecond.ui.theme.MetaText
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
-import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 
 /**
- * The Reel tab: choose a range and what text goes on each second, make the reel, and
- * keep everything backed up to Google Drive.
+ * The Reel tab: choose a range, see what is in it, and make the reel. What text goes on
+ * each second and the backup to Google Drive each have a page of their own, one tap away.
+ *
+ * Both view models are the activity's, so the reel's settings are the same here as on
+ * their settings page, and a backup goes on while this tab is shown.
  */
 @UnstableApi
 @Composable
 fun ReelScreen(
-    onAbout: () -> Unit = {},
-    compile: CompileViewModel = viewModel(factory = CompileViewModel.Factory),
-    backup: BackupViewModel = viewModel(factory = BackupViewModel.Factory),
+    onSettings: () -> Unit,
+    onTextSettings: () -> Unit,
+    onBackup: () -> Unit,
+    compile: CompileViewModel,
+    backup: BackupViewModel,
 ) {
     val reel by compile.state.collectAsStateWithLifecycle()
     val drive by backup.state.collectAsStateWithLifecycle()
-    var showStyleDialog by remember { mutableStateOf(false) }
-
     // Seconds may have been recorded or deleted on another tab since this one was last seen.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         compile.refreshCount()
         backup.refreshCount()
-    }
-
-    // Google's one-time "allow this app to use Drive" screen.
-    val consentLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartIntentSenderForResult(),
-    ) { result ->
-        backup.onConsentResult(if (result.resultCode == Activity.RESULT_OK) result.data else null)
-    }
-    LaunchedEffect(drive.consent) {
-        val pending = drive.consent ?: return@LaunchedEffect
-        backup.consentLaunched()
-        consentLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
     }
 
     val stitching = reel.phase == CompilePhase.COMPILING
@@ -116,45 +110,98 @@ fun ReelScreen(
         onDispose { view.keepScreenOn = false }
     }
 
-    Column(Modifier.fillMaxSize()) {
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            TitleText("Reel", Modifier.padding(horizontal = ScreenPadding).padding(top = 16.dp))
-            MetaText(
-                "${reel.clipCount} second${if (reel.clipCount == 1) "" else "s"} in this range",
-                Modifier.padding(horizontal = ScreenPadding).padding(top = 2.dp),
-            )
+    // The day whose second is in the preview; null means the newest one in the range.
+    var picked by remember(reel.range) { mutableStateOf<LocalDate?>(null) }
+    val shown = reel.clips.firstOrNull { it.date == picked } ?: reel.previewClip
+    val working = stitching || saving
 
-            // The preview, in portrait, beside the range.
-            Row(Modifier.padding(horizontal = ScreenPadding).padding(top = 16.dp)) {
-                val file = reel.reelFile
-                if (file != null) {
-                    ClipPlayer(file, version = file.lastModified(), label = "Play your reel", modifier = Modifier.width(132.dp))
-                } else if (reel.previewClip != null) {
-                    ClipStill(reel.previewClip, Modifier.width(132.dp).aspectRatio(CLIP_ASPECT))
-                } else {
-                    MediaPlaceholder(Modifier.width(132.dp).aspectRatio(CLIP_ASPECT))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f).selectableGroup()) {
-                    RangeOption.entries.forEach { option ->
-                        RangeRow(
-                            label = option.label,
-                            selected = reel.range == option,
-                            enabled = !stitching && !saving,
-                            onSelect = { compile.selectRange(option) },
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+            val seconds = "${reel.clipCount} second${if (reel.clipCount == 1) "" else "s"}"
+            TabHeader(
+                "Reel",
+                subtitle = when (reel.range) {
+                    RangeOption.THIS_YEAR -> "$seconds of ${reel.rangeEnd.year} so far"
+                    RangeOption.LAST_30_DAYS -> "$seconds from the last 30 days"
+                    RangeOption.LAST_7_DAYS -> "$seconds from the last 7 days"
+                },
+            ) {
+                IconAction(LineIcons.Settings, "Settings", onSettings)
+            }
+
+            // The preview, in portrait, beside the range's numbers.
+            Row(
+                Modifier.padding(horizontal = ScreenPadding).padding(top = 4.dp),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                Box(Modifier.width(PREVIEW_WIDTH)) {
+                    val file = reel.reelFile
+                    when {
+                        file != null -> ClipPlayer(
+                            file,
+                            version = file.lastModified(),
+                            label = "Play your reel",
+                            shape = Corners.Preview,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        shown != null -> ClipPlayer(
+                            shown.file,
+                            version = shown.createdAt,
+                            label = "Play the second of ${RecapLabels.dayAndMonth(shown.date)}",
+                            shape = Corners.Preview,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        else -> MediaPlaceholder(Modifier.fillMaxWidth().aspectRatio(CLIP_ASPECT).clip(Corners.Preview))
+                    }
+                    // What is in the preview: the reel once it is made, otherwise one day's second.
+                    val caption = when {
+                        file != null -> "Your reel · $seconds"
+                        shown != null -> RecapLabels.compact(shown.date) +
+                            if (shown.caption.isEmpty()) "" else " · ${shown.caption}"
+                        else -> null
+                    }
+                    if (caption != null) {
+                        Text(
+                            caption,
+                            style = AppType.LabelSmall,
+                            color = Palette.Paper,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .padding(8.dp)
+                                .clip(Corners.Chip)
+                                .background(Palette.Ink.copy(alpha = 0.78f))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
                         )
                     }
                 }
+                Spacer(Modifier.width(16.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    val days = ChronoUnit.DAYS.between(reel.rangeStart, reel.rangeEnd).toInt() + 1
+                    Stat("Kept", reel.clipCount.toString())
+                    Stat("Missed", (days - reel.clipCount).coerceAtLeast(0).toString())
+                    Stat("Length", "%02d:%02d".format(reel.clipCount / 60, reel.clipCount % 60))
+                }
             }
 
-            if (stitching || saving) {
+            Timeline(
+                reel = reel,
+                selected = shown?.date,
+                onPick = { picked = it },
+                modifier = Modifier.padding(top = 16.dp),
+            )
+
+            Segmented(
+                options = RangeOption.entries.map { it.label },
+                selected = reel.range.ordinal,
+                onSelect = { if (!working) compile.selectRange(RangeOption.entries[it]) },
+                modifier = Modifier.padding(horizontal = ScreenPadding).padding(top = 12.dp),
+            )
+
+            if (working) {
                 Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 16.dp)) {
-                    LinearProgressIndicator(
-                        progress = { if (saving) 1f else reel.progress },
-                        color = Palette.Rose,
-                        trackColor = Palette.Hairline,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                    ProgressLine(if (saving) 1f else reel.progress)
                     MetaText(
                         if (saving) {
                             "Saving to Movies…"
@@ -162,186 +209,93 @@ fun ReelScreen(
                             "Stitching ${reel.clipCount} seconds, ${(reel.progress * 100).toInt()}%. " +
                                 "Keep this tab open until it finishes."
                         },
-                        Modifier.padding(top = 8.dp),
+                        Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
                     )
                 }
             }
             reel.error?.let {
-                BodyText(
+                InlineAlert(
                     it,
                     Modifier.padding(horizontal = ScreenPadding).padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    icon = LineIcons.Warning,
                 )
             }
             reel.exportedName?.let {
-                BodyText(
+                InlineAlert(
                     "Your reel is saved to Movies/Kilasan as $it.",
                     Modifier.padding(horizontal = ScreenPadding).padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite },
+                    icon = LineIcons.Check,
                 )
             }
 
-            Hairline(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp))
-            TextOnEachSecond(reel, compile, enabled = !stitching && !saving, onStyle = { showStyleDialog = true })
-
-            Hairline(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp))
-            DriveBackupSection(drive, backup)
-
-            Hairline(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp))
-            ActionRow("About Kilasan", onAbout, subtitle = "Where book data comes from")
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(12.dp))
+            ActionRow(
+                "Text on each second",
+                onTextSettings,
+                subtitle = reel.textSummary,
+                icon = LineIcons.Text,
+                enabled = !working,
+            )
+            ActionRow("Google Drive backup", onBackup, subtitle = BackupLabels.status(drive), icon = LineIcons.Cloud)
+            Spacer(Modifier.height(FabClearance))
         }
 
-        Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp, bottom = 12.dp)) {
-            when {
-                stitching -> QuietButton("Cancel", compile::cancel, Modifier.fillMaxWidth())
-                // The reel exists but saving it failed: only that step is tried again.
-                reel.phase == CompilePhase.READY ->
-                    RoseButton("Save the reel to Movies", compile::export, Modifier.fillMaxWidth())
-                else -> RoseButton(
-                    if (reel.phase == CompilePhase.EXPORTED) "Make it again" else "Make my reel",
-                    compile::makeReel,
-                    Modifier.fillMaxWidth(),
-                    enabled = reel.clipCount > 0 && !saving,
-                )
-            }
-            MetaText("Saves to Movies/Kilasan", Modifier.padding(top = 6.dp).align(Alignment.CenterHorizontally))
+        val fab = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)
+        when {
+            stitching -> FloatingAction("Cancel", LineIcons.Close, compile::cancel, fab)
+            saving -> Unit
+            // The reel exists but saving it failed: only that step is tried again.
+            reel.phase == CompilePhase.READY -> FloatingAction("Save to Movies", LineIcons.Download, compile::export, fab)
+            reel.clipCount > 0 -> FloatingAction(
+                if (reel.phase == CompilePhase.EXPORTED) "Make it again" else "Make my reel",
+                LineIcons.Video,
+                compile::makeReel,
+                fab,
+            )
         }
-    }
-
-    if (showStyleDialog) {
-        DateStyleDialog(
-            current = reel.dateStyle,
-            showDates = reel.showDates,
-            showCaptions = reel.showCaptions,
-            showPlaces = reel.showPlaces,
-            onApply = {
-                compile.setDateStyle(it)
-                showStyleDialog = false
-            },
-            onDismiss = { showStyleDialog = false },
-        )
     }
 }
 
-@Composable
-private fun RangeRow(label: String, selected: Boolean, enabled: Boolean, onSelect: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onSelect)
-            .defaultMinSize(minHeight = 48.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(
-            selected = selected,
-            onClick = null,
-            enabled = enabled,
-            colors = RadioButtonDefaults.colors(selectedColor = Palette.Ink, unselectedColor = Palette.Muted),
-        )
-        Text(label, style = AppType.Body, color = Palette.Ink, modifier = Modifier.padding(start = 12.dp))
-    }
-}
-
-/** What is drawn on each second: the date, the caption and the place, each on or off, in one style. */
+/**
+ * Every day of the range as a strip of frames, numbered by day of the year, newest at
+ * the right-hand end where the strip opens. Tapping a kept day puts its second in the
+ * preview.
+ */
 @UnstableApi
 @Composable
-private fun TextOnEachSecond(reel: CompileUiState, compile: CompileViewModel, enabled: Boolean, onStyle: () -> Unit) {
-    Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp)) {
-        HeadingText("Text on each second")
-        Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Chip("Date", reel.showDates, { compile.setShowDates(!reel.showDates) }, enabled = enabled)
-            Chip("Caption", reel.showCaptions, { compile.setShowCaptions(!reel.showCaptions) }, enabled = enabled)
-            Chip("Place", reel.showPlaces, { compile.setShowPlaces(!reel.showPlaces) }, enabled = enabled)
-        }
-        val notes = buildList {
-            if (reel.showCaptions) add("${reel.captionCount} of ${reel.clipCount} have a caption")
-            if (reel.showPlaces) add("${reel.placeCount} of ${reel.clipCount} have a place")
-        }
-        if (notes.isNotEmpty()) MetaText(notes.joinToString(". ") + ".", Modifier.padding(top = 8.dp))
+private fun Timeline(
+    reel: CompileUiState,
+    selected: LocalDate?,
+    onPick: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val days = (ChronoUnit.DAYS.between(reel.rangeStart, reel.rangeEnd).toInt() + 1).coerceAtLeast(0)
+    val byDate = remember(reel.clips) { reel.clips.associateBy { it.date } }
+    val list = rememberLazyListState()
+    // Open on the newest days, and go back there when the range changes.
+    LaunchedEffect(reel.range, days) { if (days > 0) list.scrollToItem(days - 1) }
 
-        if (reel.showDates || reel.showCaptions || reel.showPlaces) {
-            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                MetaText(
-                    "${reel.dateStyle.font.label}, ${reel.dateStyle.edge.label.lowercase()} " +
-                        reel.dateStyle.align.label.lowercase(),
-                    Modifier.weight(1f),
-                )
-                QuietButton("Change style", onStyle, enabled = enabled)
+    LazyRow(
+        state = list,
+        modifier = modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(horizontal = ScreenPadding, vertical = 3.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        items(count = days, key = { it }) { index ->
+            val date = reel.rangeStart.plusDays(index.toLong())
+            val clip = byDate[date]
+            ContactFrame(
+                kind = if (clip != null) FrameKind.Kept else FrameKind.Missed,
+                label = RecapLabels.fullDate(date),
+                stateLabel = if (clip != null) "Second kept" else "No second",
+                number = date.dayOfYear.toString(),
+                selected = clip != null && date == selected,
+                frameHeight = 54.dp,
+                onClick = if (clip != null) ({ onPick(date) }) else null,
+                modifier = Modifier.width(40.dp),
+            ) {
+                ClipStill(clip, Modifier.fillMaxSize())
             }
-        }
-    }
-}
-
-/** Status of the Drive backup, with Back up now and Restore. */
-@Composable
-private fun DriveBackupSection(drive: BackupUiState, backup: BackupViewModel) {
-    val busy = drive.phase != BackupPhase.IDLE
-    Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp)) {
-        HeadingText("Google Drive backup")
-        MetaText(
-            "Copies your seconds and your journal to a \"Kilasan\" folder in your own Google Drive, " +
-                "one folder for each month. Nothing is sent until you tap Back up now.",
-            Modifier.padding(top = 4.dp),
-        )
-
-        when (drive.phase) {
-            BackupPhase.AUTHORIZING -> {
-                LinearProgressIndicator(
-                    color = Palette.Rose,
-                    trackColor = Palette.Hairline,
-                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                )
-                MetaText("Connecting to Google…", Modifier.padding(top = 8.dp))
-            }
-
-            BackupPhase.WORKING -> {
-                val verb = if (drive.action == BackupAction.RESTORE) "Restored" else "Checked"
-                if (drive.total > 0) {
-                    LinearProgressIndicator(
-                        progress = { drive.done.toFloat() / drive.total },
-                        color = Palette.Rose,
-                        trackColor = Palette.Hairline,
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    )
-                    MetaText(
-                        "$verb ${drive.done} of ${drive.total}. Keep this tab open until it finishes. If the " +
-                            "connection drops it tries again by itself, and if it still fails you can tap " +
-                            "again: it carries on where it stopped.",
-                        Modifier.padding(top = 8.dp),
-                    )
-                } else {
-                    LinearProgressIndicator(
-                        color = Palette.Rose,
-                        trackColor = Palette.Hairline,
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                    )
-                    MetaText("Looking at what is in Drive…", Modifier.padding(top = 8.dp))
-                }
-            }
-
-            BackupPhase.IDLE -> Unit
-        }
-
-        // The last result, good or bad, stays until the next run.
-        (drive.error ?: drive.notice)?.let {
-            BodyText(it, Modifier.padding(top = 12.dp).semantics { liveRegion = LiveRegionMode.Polite })
-        }
-
-        if (busy) {
-            QuietButton("Cancel", backup::cancel, Modifier.fillMaxWidth().padding(top = 12.dp))
-        } else {
-            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuietButton(
-                    "Back up now",
-                    { backup.start(BackupAction.BACKUP) },
-                    Modifier.weight(1f),
-                    enabled = drive.hasAnything,
-                )
-                QuietButton("Restore", { backup.start(BackupAction.RESTORE) }, Modifier.weight(1f))
-            }
-            MetaText(
-                "Restore only adds days and books that are missing from this phone. Nothing already here is overwritten.",
-                Modifier.padding(top = 8.dp),
-            )
         }
     }
 }

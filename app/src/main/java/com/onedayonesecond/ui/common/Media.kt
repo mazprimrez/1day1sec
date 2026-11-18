@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -37,8 +39,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.data.ClipEntity
 import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.TileShape
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -66,9 +68,14 @@ fun rememberClipThumbnail(clip: ClipEntity?): ImageBitmap? {
 /** A clip as a still picture filling its box, on blush until it has loaded. Decorative. */
 @UnstableApi
 @Composable
-fun ClipStill(clip: ClipEntity?, modifier: Modifier = Modifier, overlay: @Composable BoxScope.() -> Unit = {}) {
+fun ClipStill(
+    clip: ClipEntity?,
+    modifier: Modifier = Modifier,
+    shape: Shape = Corners.Frame,
+    overlay: @Composable BoxScope.() -> Unit = {},
+) {
     val picture = rememberClipThumbnail(clip)
-    Box(modifier.clip(TileShape).background(if (clip != null) Palette.Blush else Palette.Paper)) {
+    Box(modifier.clip(shape).background(if (clip != null) Palette.Blush else Palette.Paper)) {
         if (picture != null) {
             Image(picture, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
         }
@@ -83,7 +90,13 @@ fun ClipStill(clip: ClipEntity?, modifier: Modifier = Modifier, overlay: @Compos
  */
 @UnstableApi
 @Composable
-fun ClipPlayer(file: File, version: Long, label: String, modifier: Modifier = Modifier) {
+fun ClipPlayer(
+    file: File,
+    version: Long,
+    label: String,
+    modifier: Modifier = Modifier,
+    shape: Shape = Corners.Still,
+) {
     val context = LocalContext.current
     var playing by remember(file, version) { mutableStateOf(false) }
     val player = remember(file, version) {
@@ -111,7 +124,7 @@ fun ClipPlayer(file: File, version: Long, label: String, modifier: Modifier = Mo
     Box(
         modifier
             .aspectRatio(CLIP_ASPECT)
-            .clip(TileShape)
+            .clip(shape)
             .background(Palette.Blush)
             .clickable(role = Role.Button, onClickLabel = label) {
                 if (player.isPlaying) {
@@ -129,7 +142,7 @@ fun ClipPlayer(file: File, version: Long, label: String, modifier: Modifier = Mo
         )
         if (!playing) {
             Box(
-                Modifier.align(Alignment.Center).size(48.dp).clip(CircleShape).background(Palette.Paper.copy(alpha = 0.85f)),
+                Modifier.align(Alignment.Center).size(48.dp).clip(CircleShape).background(Palette.Paper.copy(alpha = 0.88f)),
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(LineIcons.Play, contentDescription = label, tint = Palette.Ink)
@@ -158,7 +171,10 @@ fun rememberJournalImage(file: File?, maxSidePx: Int = 512): ImageBitmap? {
     return image
 }
 
-/** A journal photo filling its box, on blush until loaded. [description] is read aloud; null hides it. */
+/**
+ * A journal photo filling its box, on [ground] until loaded. [description] is read
+ * aloud; null hides it.
+ */
 @Composable
 fun JournalImage(
     file: File?,
@@ -166,9 +182,11 @@ fun JournalImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     maxSidePx: Int = 512,
+    shape: Shape = Corners.Frame,
+    ground: Color = Palette.Blush,
 ) {
     val image = rememberJournalImage(file, maxSidePx)
-    Box(modifier.clip(TileShape).background(Palette.Blush)) {
+    Box(modifier.clip(shape).background(ground)) {
         if (image != null) {
             Image(image, contentDescription = description, contentScale = contentScale, modifier = Modifier.fillMaxSize())
         }

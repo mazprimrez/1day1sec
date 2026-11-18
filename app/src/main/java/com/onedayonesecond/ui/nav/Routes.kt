@@ -21,6 +21,9 @@ object Routes {
     const val REEL = "reel"
     val TABS = setOf(DAYS, RECAPS, BOOKS, REEL)
 
+    const val SETTINGS = "settings"
+    const val REEL_TEXT = "settings/reel-text"
+    const val BACKUP = "settings/backup"
     const val ABOUT = "about"
     const val ADD_BOOK = "books/add"
     const val BOOK_PATTERN = "book/{$ARG_BOOK}"

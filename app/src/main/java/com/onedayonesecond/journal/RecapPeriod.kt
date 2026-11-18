@@ -105,6 +105,17 @@ object RecapLabels {
     /** "9 to 15 Nov", for the week chips. */
     fun short(week: RecapPeriod.Week): String = range(week, "MMM")
 
+    /** "9–15 Nov", "26 Oct–1 Nov": the tightest form, for a row with little room. */
+    fun tight(week: RecapPeriod.Week): String {
+        val month = pattern("MMM")
+        val endText = "${week.end.dayOfMonth} ${week.end.format(month)}"
+        return if (week.start.month == week.end.month) {
+            "${week.start.dayOfMonth}\u2013$endText"
+        } else {
+            "${week.start.dayOfMonth} ${week.start.format(month)}\u2013$endText"
+        }
+    }
+
     private fun range(week: RecapPeriod.Week, monthPattern: String): String {
         val month = pattern(monthPattern)
         val endText = "${week.end.dayOfMonth} ${week.end.format(month)}"

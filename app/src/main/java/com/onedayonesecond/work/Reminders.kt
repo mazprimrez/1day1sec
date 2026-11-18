@@ -19,9 +19,6 @@ object Reminders {
     const val NOTIFICATION_ID = 1001
     private const val WORK_NAME = "daily_reminder_check"
 
-    /** Local time of day the reminder fires, if today has no clip yet. */
-    val REMINDER_TIME: LocalTime = LocalTime.of(20, 0)
-
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
@@ -34,15 +31,21 @@ object Reminders {
         context.getSystemService<NotificationManager>()?.createNotificationChannel(channel)
     }
 
-    fun schedule(context: Context) {
+    /**
+     * Checks once a day at [time], and reminds if that day has no second yet.
+     *
+     * @param replace true when the time has just been changed: the check already
+     *   waiting is dropped for one at the new time. False on app start, so that
+     *   opening the app does not reset the daily cadence.
+     */
+    fun schedule(context: Context, time: LocalTime, replace: Boolean = false) {
         val request = PeriodicWorkRequestBuilder<ReminderWorker>(Duration.ofDays(1))
-            .setInitialDelay(delayUntilNextReminder())
+            .setInitialDelay(delayUntil(time, LocalDateTime.now()))
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             WORK_NAME,
-            // KEEP so that relaunching the app doesn't reset the daily cadence.
-            ExistingPeriodicWorkPolicy.KEEP,
+            if (replace) ExistingPeriodicWorkPolicy.CANCEL_AND_REENQUEUE else ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
     }
@@ -51,9 +54,9 @@ object Reminders {
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
     }
 
-    private fun delayUntilNextReminder(): Duration {
-        val now = LocalDateTime.now()
-        var next = now.toLocalDate().atTime(REMINDER_TIME)
+    /** How long from [now] until the clock next reads [time]: later today, or tomorrow. */
+    fun delayUntil(time: LocalTime, now: LocalDateTime): Duration {
+        var next = now.toLocalDate().atTime(time)
         if (!next.isAfter(now)) next = next.plusDays(1)
         return Duration.between(now, next)
     }

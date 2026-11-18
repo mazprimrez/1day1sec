@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,6 +24,22 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.style.TextAlign
+import com.onedayonesecond.ui.theme.ContactFrame
+import com.onedayonesecond.ui.theme.FrameKind
+import com.onedayonesecond.ui.theme.MoodFace
+import com.onedayonesecond.ui.theme.ProgressLine
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.TextAction
+import com.onedayonesecond.ui.theme.TintCard
+import java.time.DayOfWeek
+import java.time.YearMonth
+import androidx.compose.ui.graphics.PathEffect
+import com.onedayonesecond.ui.theme.StateCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -40,14 +55,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -79,11 +91,10 @@ import com.onedayonesecond.ui.theme.HeadingText
 import com.onedayonesecond.ui.theme.IconAction
 import com.onedayonesecond.ui.theme.LineIcons
 import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TileShape
 import com.onedayonesecond.ui.theme.TitleText
 import java.time.Instant
 import java.time.LocalDate
@@ -115,99 +126,127 @@ fun RecapScreen(
     val clips = remember(state.clips) { state.clips.values.sortedBy { it.date } }
 
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack, backLabel = "Back to recaps")
+        BackBar(
+            onBack,
+            backLabel = "Back to recaps",
+            title = when (period) {
+                is RecapPeriod.Week -> "Weekly recap"
+                is RecapPeriod.Month -> "Monthly recap"
+                is RecapPeriod.Year -> "Yearly recap"
+            },
+        )
+        PeriodTabs(period, today, onOpenRecap)
 
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = ScreenPadding, top = 8.dp, end = ScreenPadding, bottom = 40.dp),
+        ) {
             // 1. The period, with a way to step to the one before (and after, once there is one).
-            Row(
-                Modifier.fillMaxWidth().padding(start = ScreenPadding, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                MetaText(RecapLabels.long(period), Modifier.weight(1f))
-                IconAction(LineIcons.ChevronLeft, "Previous ${period.noun}", { onOpenRecap(period.previous()) })
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                IconAction(
+                    LineIcons.ChevronLeft,
+                    "Previous ${period.noun}",
+                    { onOpenRecap(period.previous()) },
+                    Modifier.offset(x = (-12).dp),
+                )
+                Text(
+                    when {
+                        period is RecapPeriod.Year && period.year == today.year ->
+                            "${period.year} so far, up to ${RecapLabels.dayAndMonth(today)}"
+                        else -> RecapLabels.long(period)
+                    },
+                    style = AppType.TitleSmall,
+                    color = Palette.Ink,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
                 IconAction(
                     LineIcons.ChevronRight,
-                    "Next ${period.noun}",
+                    if (period.next().start.isAfter(today)) "Next ${period.noun}, not ready yet" else "Next ${period.noun}",
                     { onOpenRecap(period.next()) },
+                    Modifier.offset(x = 12.dp),
                     enabled = !period.next().start.isAfter(today),
                 )
             }
 
             // 2. Title and quote.
-            Column(Modifier.padding(horizontal = ScreenPadding)) {
-                if (status is RecapStatus.Ready) {
-                    TitleText(status.recap.title)
-                    if (status.recap.quote.isNotEmpty()) {
-                        Text(
-                            "“${status.recap.quote}”",
-                            style = AppType.Quote,
-                            color = Palette.Rose,
-                            modifier = Modifier.padding(top = 16.dp),
-                        )
-                        MetaText(
-                            RecapLabels.quoteSource(period, status.recap.quoteDate),
-                            Modifier.padding(top = 6.dp),
-                        )
+            if (status is RecapStatus.Ready) {
+                TitleText(status.recap.title, Modifier.padding(top = 8.dp))
+                if (status.recap.quote.isNotEmpty()) {
+                    TintCard(Modifier.padding(top = 22.dp)) {
+                        Text("“${status.recap.quote}”", style = AppType.Quote, color = Palette.Ink)
                     }
-                } else {
-                    TitleText(
-                        when (period) {
-                            is RecapPeriod.Week -> if (today in period.start..period.end) "This week" else "That week"
-                            is RecapPeriod.Month -> period.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
-                            is RecapPeriod.Year -> period.year.toString()
-                        },
+                    Text(
+                        RecapLabels.quoteSource(period, status.recap.quoteDate),
+                        style = AppType.Tab,
+                        color = Palette.Rose,
+                        modifier = Modifier.padding(start = 20.dp, top = 10.dp),
                     )
                 }
+            } else {
+                TitleText(
+                    when (period) {
+                        is RecapPeriod.Week -> if (today in period.start..period.end) "This week" else "That week"
+                        is RecapPeriod.Month -> period.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                        is RecapPeriod.Year -> period.year.toString()
+                    },
+                    Modifier.padding(top = 8.dp),
+                )
             }
 
             // 3. One picture of the days.
             Spacer(Modifier.height(24.dp))
             when (period) {
-                is RecapPeriod.Week -> WeekTiles(period, state, onOpenDay)
-                is RecapPeriod.Month -> MonthTiles(period, state, onOpenDay)
+                is RecapPeriod.Week -> WeekFrames(period, state, onOpenDay)
+                is RecapPeriod.Month -> MonthFrames(period, state, onOpenDay)
                 is RecapPeriod.Year -> YearPreview(period.year, state.moods, today) { onOpenPixels(period.year) }
             }
-            MetaText(
-                if (period is RecapPeriod.Year) {
-                    "Each square is a day, coloured by mood. Darker is a harder day."
-                } else {
-                    "The bar under each day is your mood. Darker is a harder day."
-                },
-                Modifier.padding(horizontal = ScreenPadding).padding(top = 12.dp),
-            )
+            when (period) {
+                is RecapPeriod.Week ->
+                    SmallText("Each frame is that day's second; the face on it is your mood.", Modifier.padding(top = 10.dp))
+                is RecapPeriod.Month -> MetaText(
+                    "Each frame is a day's second; the face under it is your mood. Dashed frames are missed days.",
+                    Modifier.padding(top = 10.dp),
+                )
+                is RecapPeriod.Year -> Unit
+            }
 
             // 4. Play the period's seconds back to back.
             if (clips.isNotEmpty()) {
-                val what = if (today in period.start..period.end) "this ${period.noun}" else "that ${period.noun}"
-                QuietButton(
+                val what = when {
+                    period is RecapPeriod.Month -> period.month.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
+                    period is RecapPeriod.Year && period.year == today.year -> "${period.year} so far"
+                    period is RecapPeriod.Year -> period.year.toString()
+                    today in period.start..period.end -> "this week"
+                    else -> "that week"
+                }
+                TextAction(
                     "Play $what, ${clips.size} second${if (clips.size == 1) "" else "s"}",
                     { playing = true },
-                    Modifier.padding(horizontal = ScreenPadding).padding(top = 12.dp),
+                    Modifier.padding(top = 6.dp).offset(x = (-12).dp),
+                    icon = LineIcons.PlayFilled,
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
 
             // 5. The chapters, or why there are none yet.
             when (status) {
                 is RecapStatus.Ready -> Chapters(period, status.content, state.name)
                 RecapStatus.Loading -> Unit
-                RecapStatus.Writing -> WritingPlaceholder()
+                RecapStatus.Writing -> WritingPlaceholder(period)
                 is RecapStatus.NotEnough -> NotEnough(period, status.daysWritten, today) { onWrite(today) }
                 is RecapStatus.NotDue -> NotDue(period, status)
-                is RecapStatus.Missing -> Missing(status.failure, viewModel::writeNow)
-                RecapStatus.NotSetUp -> StateNote(
-                    "Letters can't be written yet: the AI service isn't set up in this build of the app. " +
-                        "Your entries are safe.",
-                )
+                is RecapStatus.Missing -> Missing(period, status.failure, viewModel::writeNow, onBack)
+                RecapStatus.NotSetUp -> StateCard("Letters can't be written yet") {
+                    BodyText("The AI service isn't set up in this build of the app. Your entries are safe.")
+                }
             }
 
             // 6.
-            Hairline(Modifier.padding(horizontal = ScreenPadding).padding(top = 24.dp))
-            MetaText(
-                "A reflection from your own entries, not therapy.",
-                Modifier.padding(horizontal = ScreenPadding, vertical = 20.dp),
-            )
+            MetaText("A reflection from your own entries, not therapy.", Modifier.padding(top = 36.dp))
         }
     }
 
@@ -216,85 +255,113 @@ fun RecapScreen(
 
 // The picture
 
+/** Week, Month, Year: the same page at three lengths. Choosing one opens the period that holds this one. */
 @Composable
-private fun MoodBar(mood: Mood?, modifier: Modifier = Modifier) {
-    val shape = RoundedCornerShape(2.dp)
-    Box(
-        modifier
-            .fillMaxWidth()
-            .height(4.dp)
-            .clip(shape)
-            .then(
-                if (mood != null) Modifier.background(Palette.mood(mood)) else Modifier.border(1.dp, Palette.Hairline, shape),
-            ),
+private fun PeriodTabs(period: RecapPeriod, today: LocalDate, onOpen: (RecapPeriod) -> Unit) {
+    val tabs = listOf(
+        Triple("Week", period is RecapPeriod.Week) { onOpen(period.asWeek(today)) },
+        Triple("Month", period is RecapPeriod.Month) { onOpen(period.asMonth(today)) },
+        Triple("Year", period is RecapPeriod.Year) { onOpen(period.asYear()) },
     )
-}
-
-@UnstableApi
-@Composable
-private fun DayTile(
-    date: LocalDate,
-    clip: ClipEntity?,
-    mood: Mood?,
-    isFuture: Boolean,
-    onOpen: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier
-            .clip(TileShape)
-            .clickable(enabled = !isFuture, role = Role.Button, onClick = onOpen)
-            .clearAndSetSemantics {
-                contentDescription = RecapLabels.fullDate(date)
-                stateDescription = listOf(
-                    if (clip != null) "Second kept" else "No second",
-                    if (mood != null) "mood ${mood.label.lowercase()}" else "no mood",
-                ).joinToString(", ")
-                if (!isFuture) role = Role.Button
-            },
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        if (clip != null) {
-            ClipStill(clip, Modifier.fillMaxWidth().aspectRatio(CLIP_ASPECT))
-        } else {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(CLIP_ASPECT)
-                    .then(if (isFuture) Modifier else Modifier.border(1.dp, Palette.Hairline, TileShape)),
-            )
+    Column {
+        Row(Modifier.fillMaxWidth().selectableGroup()) {
+            tabs.forEach { (label, on, open) ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .selectable(selected = on, role = Role.Tab, onClick = { if (!on) open() }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, style = AppType.Label, color = if (on) Palette.Ink else Palette.Muted)
+                    if (on) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(2.dp).background(Palette.Rose))
+                }
+            }
         }
-        if (!isFuture) MoodBar(mood) else Spacer(Modifier.height(4.dp))
+        Hairline()
     }
 }
 
+/** The week this period is, or the latest week of it that has begun. */
+private fun RecapPeriod.asWeek(today: LocalDate): RecapPeriod.Week = when (this) {
+    is RecapPeriod.Week -> this
+    is RecapPeriod.Month -> RecapPeriod.weeksOf(month).let { weeks ->
+        weeks.lastOrNull { !it.start.isAfter(today) } ?: weeks.first()
+    }
+    is RecapPeriod.Year ->
+        if (year == today.year) RecapPeriod.weekOf(today) else RecapPeriod.weeksOf(YearMonth.of(year, 12)).last()
+}
+
+private fun RecapPeriod.asMonth(today: LocalDate): RecapPeriod.Month = when (this) {
+    is RecapPeriod.Week -> RecapPeriod.Month(month)
+    is RecapPeriod.Month -> this
+    is RecapPeriod.Year -> RecapPeriod.Month(if (year == today.year) YearMonth.from(today) else YearMonth.of(year, 12))
+}
+
+private fun RecapPeriod.asYear(): RecapPeriod.Year = when (this) {
+    is RecapPeriod.Week -> RecapPeriod.Year(month.year)
+    is RecapPeriod.Month -> RecapPeriod.Year(month.year)
+    is RecapPeriod.Year -> this
+}
+
+private fun frameKind(clip: ClipEntity?, isFuture: Boolean) = when {
+    clip != null -> FrameKind.Kept
+    isFuture -> FrameKind.Future
+    else -> FrameKind.Missed
+}
+
+private fun frameState(clip: ClipEntity?, mood: Mood?, isFuture: Boolean) = when {
+    isFuture -> "Not yet"
+    else -> listOf(
+        if (clip != null) "Second kept" else "No second",
+        if (mood != null) "mood ${mood.label.lowercase()}" else "no mood",
+    ).joinToString(", ")
+}
+
+/** The week as a strip of seven frames, each with its mood face on it and its day under it. */
 @UnstableApi
 @Composable
-private fun WeekTiles(week: RecapPeriod.Week, state: RecapUiState, onOpenDay: (LocalDate) -> Unit) {
+private fun WeekFrames(week: RecapPeriod.Week, state: RecapUiState, onOpenDay: (LocalDate) -> Unit) {
     val locale = Locale.getDefault()
-    Row(Modifier.padding(horizontal = ScreenPadding), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         (0L..6L).forEach { offset ->
             val date = week.start.plusDays(offset)
+            val clip = state.clips[date]
+            val mood = state.moods[date]
+            val isFuture = date.isAfter(state.today)
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                MetaText(
-                    date.dayOfWeek.getDisplayName(TextStyle.NARROW, locale),
-                    Modifier.padding(bottom = 4.dp).clearAndSetSemantics { },
-                )
-                DayTile(
-                    date = date,
-                    clip = state.clips[date],
-                    mood = state.moods[date],
-                    isFuture = date.isAfter(state.today),
-                    onOpen = { onOpenDay(date) },
+                ContactFrame(
+                    kind = frameKind(clip, isFuture),
+                    label = RecapLabels.fullDate(date),
+                    stateLabel = frameState(clip, mood, isFuture),
+                    number = "%02d".format(date.dayOfMonth),
+                    today = date == state.today,
+                    mood = mood,
+                    frameHeight = 64.dp,
+                    small = true,
+                    onClick = { onOpenDay(date) },
+                ) {
+                    ClipStill(clip, Modifier.fillMaxSize())
+                }
+                Text(
+                    date.dayOfWeek.getDisplayName(TextStyle.SHORT, locale),
+                    style = AppType.LabelSmall,
+                    color = Palette.Muted,
+                    modifier = Modifier.clearAndSetSemantics { },
                 )
             }
         }
     }
 }
 
+/**
+ * The month as a calendar of small frames, Monday first, with the mood face under
+ * each. Here the days sit under their weekdays, because a month is read by its weeks.
+ */
 @UnstableApi
 @Composable
-private fun MonthTiles(month: RecapPeriod.Month, state: RecapUiState, onOpenDay: (LocalDate) -> Unit) {
+private fun MonthFrames(month: RecapPeriod.Month, state: RecapUiState, onOpenDay: (LocalDate) -> Unit) {
+    val locale = Locale.getDefault()
     val cells = buildList<LocalDate?> {
         repeat(month.start.dayOfWeek.value - 1) { add(null) }
         var day = month.start
@@ -304,21 +371,42 @@ private fun MonthTiles(month: RecapPeriod.Month, state: RecapUiState, onOpenDay:
         }
         while (size % 7 != 0) add(null)
     }
-    Column(Modifier.padding(horizontal = ScreenPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.clearAndSetSemantics { }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            DayOfWeek.entries.forEach { day ->
+                Text(
+                    day.getDisplayName(TextStyle.NARROW, locale),
+                    style = AppType.Meta,
+                    color = Palette.Muted,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
         cells.chunked(7).forEach { week ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 week.forEach { date ->
                     if (date == null) {
                         Spacer(Modifier.weight(1f))
                     } else {
-                        DayTile(
-                            date = date,
-                            clip = state.clips[date],
-                            mood = state.moods[date],
-                            isFuture = date.isAfter(state.today),
-                            onOpen = { onOpenDay(date) },
-                            modifier = Modifier.weight(1f),
-                        )
+                        val clip = state.clips[date]
+                        val mood = state.moods[date]
+                        val isFuture = date.isAfter(state.today)
+                        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                            ContactFrame(
+                                kind = frameKind(clip, isFuture),
+                                label = RecapLabels.fullDate(date),
+                                stateLabel = frameState(clip, mood, isFuture),
+                                today = date == state.today,
+                                frameHeight = 40.dp,
+                                onClick = { onOpenDay(date) },
+                            ) {
+                                ClipStill(clip, Modifier.fillMaxSize())
+                            }
+                            Box(Modifier.padding(top = 5.dp).size(18.dp)) {
+                                if (mood != null) MoodFace(mood, size = 18.dp)
+                            }
+                        }
                     }
                 }
             }
@@ -326,61 +414,81 @@ private fun MonthTiles(month: RecapPeriod.Month, state: RecapUiState, onOpenDay:
     }
 }
 
-/** A small year in pixels that opens the full one. */
+/** A small year in pixels, a row to a month, that opens the full one. */
 @Composable
 private fun YearPreview(year: Int, moods: Map<LocalDate, Mood>, today: LocalDate, onOpen: () -> Unit) {
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
+            .clip(Corners.Card)
+            .border(1.dp, Palette.Hairline, Corners.Card)
             .clickable(role = Role.Button, onClickLabel = "Open the year in pixels", onClick = onOpen)
-            .padding(horizontal = ScreenPadding),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(16.dp),
     ) {
         Canvas(
-            Modifier.width(120.dp).aspectRatio(Pixels.MONTHS / Pixels.DAYS.toFloat()).clearAndSetSemantics { },
+            Modifier
+                .fillMaxWidth()
+                .height(STRIP_CELL * Pixels.MONTHS + STRIP_GAP * (Pixels.MONTHS - 1))
+                .semantics { contentDescription = "Small preview of your year in pixels" },
         ) {
-            drawPixels(year, moods, today, gapFraction = 0.2f)
+            val gap = STRIP_GAP.toPx()
+            val w = (size.width - gap * (Pixels.DAYS - 1)) / Pixels.DAYS
+            val h = STRIP_CELL.toPx()
+            val corner = CornerRadius(1.5.dp.toPx())
+            for (month in 1..Pixels.MONTHS) {
+                for (day in 1..Pixels.DAYS) {
+                    val pixel = Pixels.at(year, month, day, moods, today)
+                    val topLeft = Offset((day - 1) * (w + gap), (month - 1) * (h + gap))
+                    when (pixel.kind) {
+                        PixelKind.MOOD -> drawRoundRect(Palette.mood(pixel.mood!!), topLeft, Size(w, h), corner)
+                        PixelKind.EMPTY -> drawRoundRect(Palette.Hairline, topLeft, Size(w, h), corner, style = Stroke(1.dp.toPx()))
+                        PixelKind.FUTURE -> drawRoundRect(Palette.Hairline.copy(alpha = 0.5f), topLeft, Size(w, h), corner)
+                        PixelKind.ABSENT -> Unit
+                    }
+                }
+            }
         }
-        Column(Modifier.weight(1f).padding(start = 16.dp)) {
-            Text("Year in pixels", style = AppType.Body, color = Palette.Ink)
-            MetaText("${moods.size} day${if (moods.size == 1) "" else "s"} with a mood. Open it full size.")
+        Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Open year in pixels", style = AppType.Label, color = Palette.Ink, modifier = Modifier.weight(1f))
+            Icon(LineIcons.ChevronRight, contentDescription = null, tint = Palette.Ink, modifier = Modifier.size(18.dp))
         }
-        Icon(LineIcons.ChevronRight, contentDescription = null, tint = Palette.Muted)
     }
 }
 
-/** Draws the grid to fill the canvas: months across, days down. Shared with the pixels page. */
+private val STRIP_CELL = 6.dp
+private val STRIP_GAP = 2.dp
+
+/**
+ * Draws the year's grid to fill the canvas: months across, days down, [gap] between
+ * squares. A day with a mood is filled with its colour; a day without one is a dashed
+ * outline; days still to come are left as paper. Used by the pixels page.
+ */
 fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPixels(
     year: Int,
     moods: Map<LocalDate, Mood>,
     today: LocalDate,
-    gapFraction: Float,
+    gap: Float,
+    corner: Float,
 ) {
-    val cellW = size.width / Pixels.MONTHS
-    val cellH = size.height / Pixels.DAYS
-    val gap = minOf(cellW, cellH) * gapFraction
-    val w = cellW - gap
-    val h = cellH - gap
-    val corner = CornerRadius(minOf(w, h) * 0.2f)
+    val w = (size.width - gap * (Pixels.MONTHS - 1)) / Pixels.MONTHS
+    val h = (size.height - gap * (Pixels.DAYS - 1)) / Pixels.DAYS
+    val radius = CornerRadius(corner)
+    val line = 1.dp.toPx()
+    val dashes = Stroke(line, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx())))
     for (month in 1..Pixels.MONTHS) {
         for (day in 1..Pixels.DAYS) {
             val pixel = Pixels.at(year, month, day, moods, today)
-            val topLeft = Offset((month - 1) * cellW + gap / 2, (day - 1) * cellH + gap / 2)
+            val topLeft = Offset((month - 1) * (w + gap), (day - 1) * (h + gap))
             when (pixel.kind) {
-                PixelKind.MOOD -> drawRoundRect(Palette.mood(pixel.mood!!), topLeft, Size(w, h), corner)
+                PixelKind.MOOD -> drawRoundRect(Palette.mood(pixel.mood!!), topLeft, Size(w, h), radius)
                 PixelKind.EMPTY -> drawRoundRect(
-                    Palette.Hairline,
-                    topLeft,
-                    Size(w, h),
-                    corner,
-                    style = Stroke(1.dp.toPx().coerceAtMost(w / 4)),
+                    Palette.PixelEmpty,
+                    Offset(topLeft.x + line / 2, topLeft.y + line / 2),
+                    Size(w - line, h - line),
+                    radius,
+                    style = dashes,
                 )
-                PixelKind.FUTURE -> drawCircle(
-                    Palette.Hairline,
-                    radius = minOf(w, h) * 0.12f,
-                    center = Offset(topLeft.x + w / 2, topLeft.y + h / 2),
-                )
-                PixelKind.ABSENT -> Unit
+                PixelKind.FUTURE, PixelKind.ABSENT -> Unit
             }
         }
     }
@@ -388,34 +496,36 @@ fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPixels(
 
 // The chapters
 
+/** A part of the letter: a hairline, a heading, then what it says. */
 @Composable
-private fun Chapter(title: String, first: Boolean = false, content: @Composable () -> Unit) {
-    Column(Modifier.padding(horizontal = ScreenPadding)) {
-        if (!first) Hairline(Modifier.padding(vertical = 20.dp))
-        HeadingText(title, Modifier.padding(bottom = 8.dp))
+private fun Chapter(title: String, content: @Composable () -> Unit) {
+    Column {
+        Hairline()
+        HeadingText(title, Modifier.padding(top = 20.dp, bottom = 14.dp))
         content()
+        Spacer(Modifier.height(20.dp))
     }
 }
 
 @Composable
 private fun Chapters(period: RecapPeriod, content: RecapContent, name: String) {
     val locale = Locale.getDefault()
-    var first = true
-    fun isFirst(): Boolean = first.also { first = false }
 
     if (content.whatHappened.isNotEmpty()) {
-        Chapter("What happened", isFirst()) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Chapter("What happened") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 content.whatHappened.forEach { line ->
                     Row {
                         // Within a week the weekday places a line; over longer stretches the date does.
-                        MetaText(
+                        Text(
                             if (period is RecapPeriod.Week) {
                                 line.date.dayOfWeek.getDisplayName(TextStyle.SHORT, locale)
                             } else {
                                 RecapLabels.compactDay(line.date)
                             },
-                            Modifier.width(if (period is RecapPeriod.Week) 48.dp else 64.dp).padding(top = 2.dp),
+                            style = AppType.Body,
+                            color = Palette.Muted,
+                            modifier = Modifier.width(if (period is RecapPeriod.Week) 56.dp else 72.dp),
                         )
                         BodyText(line.text, Modifier.weight(1f))
                     }
@@ -425,16 +535,18 @@ private fun Chapters(period: RecapPeriod, content: RecapContent, name: String) {
     }
 
     if (content.note.isNotEmpty()) {
-        Chapter("A note for you", isFirst()) {
-            if (name.isNotBlank()) BodyText("Dear ${name.trim()},", Modifier.padding(bottom = 8.dp))
-            // The page writes the greeting itself; one the model added anyway is dropped.
-            BodyText(content.note.replace(Regex("^\\s*Dear [^,\\n]{1,40},\\s*"), ""))
+        Chapter("A note for you") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (name.isNotBlank()) BodyText("Dear ${name.trim()},")
+                // The page writes the greeting itself; one the model added anyway is dropped.
+                BodyText(content.note.replace(Regex("^\\s*Dear [^,\\n]{1,40},\\s*"), ""))
+            }
         }
     }
 
     if (content.changes.isNotEmpty()) {
-        Chapter("Since last ${period.noun}", isFirst()) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Chapter("Since last ${period.noun}") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 content.changes.forEach { change ->
                     Row {
                         Icon(
@@ -448,8 +560,8 @@ private fun Chapters(period: RecapPeriod, content: RecapContent, name: String) {
                                 Direction.DOWN -> "Down:"
                                 Direction.SAME -> "About the same:"
                             },
-                            tint = Palette.Ink,
-                            modifier = Modifier.padding(top = 2.dp, end = 12.dp).size(20.dp),
+                            tint = Palette.Rose,
+                            modifier = Modifier.padding(top = 3.dp, end = 12.dp).size(18.dp),
                         )
                         BodyText(change.text, Modifier.weight(1f))
                     }
@@ -460,11 +572,18 @@ private fun Chapters(period: RecapPeriod, content: RecapContent, name: String) {
 
     if (content.tries.isNotEmpty()) {
         // Suggestions, not chores: plain bullets, nothing to tick off.
-        Chapter("Something to try", isFirst()) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Chapter("Something to try") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 content.tries.forEach { suggestion ->
                     Row {
-                        Text("•", style = AppType.Body, color = Palette.Muted, modifier = Modifier.width(20.dp).clearAndSetSemantics { })
+                        Box(
+                            Modifier
+                                .padding(top = 9.dp, end = 12.dp)
+                                .size(6.dp)
+                                .clip(CircleShape)
+                                .background(Palette.Rose)
+                                .clearAndSetSemantics { },
+                        )
                         BodyText(suggestion, Modifier.weight(1f))
                     }
                 }
@@ -473,23 +592,20 @@ private fun Chapters(period: RecapPeriod, content: RecapContent, name: String) {
     }
 
     if (content.places.isNotEmpty()) {
-        Chapter("Where you were", isFirst()) {
+        Chapter("Where you were") {
             val most = content.places.maxOf { it.days }
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 content.places.forEach { place ->
                     Column(Modifier.semantics(mergeDescendants = true) { }) {
-                        Row {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             BodyText(place.name, Modifier.weight(1f))
-                            MetaText("${place.days} day${if (place.days == 1) "" else "s"}", Modifier.padding(top = 2.dp))
+                            Text(
+                                "${place.days} day${if (place.days == 1) "" else "s"}",
+                                style = AppType.Timecode,
+                                color = Palette.Muted,
+                            )
                         }
-                        Box(
-                            Modifier
-                                .padding(top = 4.dp)
-                                .fillMaxWidth(place.days.toFloat() / most)
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Palette.Blush),
-                        )
+                        ProgressLine(place.days.toFloat() / most, Modifier.padding(top = 6.dp).clearAndSetSemantics { })
                     }
                 }
             }
@@ -499,28 +615,16 @@ private fun Chapters(period: RecapPeriod, content: RecapContent, name: String) {
 
 // The states
 
+/** Tinted lines where the letter will be, so the page does not jump when it arrives. */
 @Composable
-private fun StateNote(text: String, modifier: Modifier = Modifier) {
-    Column(Modifier.padding(horizontal = ScreenPadding)) {
-        Hairline(Modifier.padding(bottom = 20.dp))
-        BodyText(text, modifier.semantics { liveRegion = LiveRegionMode.Polite })
-    }
-}
-
-/** Grey lines where the letter will be, so the page does not jump when it arrives. */
-@Composable
-private fun WritingPlaceholder() {
-    Column(Modifier.padding(horizontal = ScreenPadding)) {
-        Hairline(Modifier.padding(bottom = 20.dp))
+private fun WritingPlaceholder(period: RecapPeriod) {
+    StateCard("Writing your letter for ${RecapLabels.long(period)}…") {
         Column(Modifier.clearAndSetSemantics { }, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            listOf(0.5f, 1f, 0.92f, 0.97f, 0.6f).forEach { width ->
-                Box(Modifier.fillMaxWidth(width).height(14.dp).clip(RoundedCornerShape(7.dp)).background(Palette.Hairline))
+            listOf(0.92f, 1f, 0.84f, 0.6f).forEach { width ->
+                Box(Modifier.fillMaxWidth(width).height(12.dp).clip(RoundedCornerShape(6.dp)).background(Palette.Blush.copy(alpha = 0.5f)))
             }
         }
-        MetaText(
-            "Your letter is being written. Takes about a minute.",
-            Modifier.padding(top = 16.dp).semantics { liveRegion = LiveRegionMode.Polite },
-        )
+        MetaText("Takes about a minute. You can leave this screen, it will be in Recaps when it's ready.")
     }
 }
 
@@ -528,15 +632,22 @@ private fun WritingPlaceholder() {
 private fun NotEnough(period: RecapPeriod, daysWritten: Int, today: LocalDate, onWrite: () -> Unit) {
     val days = "$daysWritten day${if (daysWritten == 1) "" else "s"}"
     val min = RecapRules.MIN_DAYS_WITH_ENTRIES
-    Column(Modifier.padding(horizontal = ScreenPadding)) {
-        Hairline(Modifier.padding(bottom = 20.dp))
-        if (today in period.start..period.end) {
-            BodyText("You've written on $days this ${period.noun}. Write on $min or more and a letter is written for you.")
-            RoseButton("Write about today", onWrite, Modifier.fillMaxWidth().padding(top = 16.dp))
-        } else {
+    if (today in period.start..period.end) {
+        StateCard("Your letter needs a few more days") {
+            BodyText("You've written on $days this ${period.noun}. Write on $min or more and your letter arrives ${period.arrival()}.")
+            RoseButton("Write about today", onWrite, icon = LineIcons.Write)
+        }
+    } else {
+        StateCard("No letter for that ${period.noun}") {
             BodyText("You wrote on $days that ${period.noun}. A letter needs $min or more days of writing, so none was written.")
         }
     }
+}
+
+/** "Sunday night" for a week; the date a longer period's letter is due otherwise. */
+private fun RecapPeriod.arrival(): String = when (this) {
+    is RecapPeriod.Week -> "Sunday night"
+    else -> "on ${RecapLabels.dayAndMonth(RecapRules.arrives(this))}"
 }
 
 @Composable
@@ -546,21 +657,25 @@ private fun NotDue(period: RecapPeriod, status: RecapStatus.NotDue) {
         else -> "on ${RecapLabels.dayAndMonth(status.arrives)}"
     }
     val days = "${status.daysWritten} day${if (status.daysWritten == 1) "" else "s"}"
-    StateNote("The letter for this ${period.noun} arrives $whenText. You've written on $days so far.")
+    StateCard("This ${period.noun}'s letter arrives $whenText") {
+        BodyText("You've written on $days so far.")
+    }
 }
 
 @Composable
-private fun Missing(failure: RecapFailure?, onWriteNow: () -> Unit) {
+private fun Missing(period: RecapPeriod, failure: RecapFailure?, onWriteNow: () -> Unit, onBack: () -> Unit) {
     val text = when (failure?.reason) {
-        RecapFailureReason.OFFLINE -> "Your phone was offline ${failure.at.asMoment()}. Your entries are safe."
+        RecapFailureReason.OFFLINE -> "Your phone was offline ${failure.at.asMoment()}. Your entries are safe and nothing was lost."
         RecapFailureReason.FAILED, RecapFailureReason.NOT_SET_UP ->
-            "The letter couldn't be written ${failure.at.asMoment()}. Your entries are safe."
+            "The letter couldn't be written ${failure.at.asMoment()}. Your entries are safe and nothing was lost."
         null -> "This letter hasn't been written yet. Your entries are safe."
     }
-    Column(Modifier.padding(horizontal = ScreenPadding)) {
-        Hairline(Modifier.padding(bottom = 20.dp))
-        BodyText(text, Modifier.semantics { liveRegion = LiveRegionMode.Polite })
-        RoseButton("Write the letter now", onWriteNow, Modifier.fillMaxWidth().padding(top = 16.dp))
+    StateCard("This ${period.noun}'s letter wasn't written") {
+        BodyText(text)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            RoseButton("Write the letter now", onWriteNow)
+            TextAction("Back to recaps", onBack, color = Palette.Ink)
+        }
     }
 }
 
@@ -612,12 +727,12 @@ private fun PlayDialog(clips: List<ClipEntity>, onDismiss: () -> Unit) {
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Box(Modifier.fillMaxSize().background(Palette.Paper).systemBarsPadding()) {
-            Column(Modifier.fillMaxSize().padding(top = 56.dp, bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.fillMaxSize().padding(top = 64.dp, bottom = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     Modifier
                         .weight(1f)
                         .aspectRatio(CLIP_ASPECT, matchHeightConstraintsFirst = true)
-                        .clip(TileShape)
+                        .clip(Corners.Preview)
                         .background(Palette.Blush),
                 ) {
                     AndroidView(
@@ -634,7 +749,7 @@ private fun PlayDialog(clips: List<ClipEntity>, onDismiss: () -> Unit) {
                     )
                 }
             }
-            IconAction(LineIcons.Close, "Stop playing", onDismiss, Modifier.padding(8.dp))
+            IconAction(LineIcons.Close, "Stop playing", onDismiss, Modifier.padding(horizontal = 4.dp, vertical = 8.dp))
         }
     }
 }

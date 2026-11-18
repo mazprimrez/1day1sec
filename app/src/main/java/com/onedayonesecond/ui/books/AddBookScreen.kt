@@ -16,11 +16,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.focus.FocusRequester
+import com.onedayonesecond.ui.theme.AssistChip
+import com.onedayonesecond.ui.theme.BusyLine
+import com.onedayonesecond.ui.theme.SearchBar
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.StateCard
+import com.onedayonesecond.ui.theme.TextAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,17 +65,15 @@ import com.onedayonesecond.ui.nav.Routes
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BackBar
 import com.onedayonesecond.ui.theme.BodyText
-import com.onedayonesecond.ui.theme.ButtonShape
 import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.IconAction
 import com.onedayonesecond.ui.theme.LineIcons
 import com.onedayonesecond.ui.theme.MessageAction
 import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import com.onedayonesecond.ui.theme.appTextFieldColors
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -163,93 +172,110 @@ fun AddBookScreen(
         return
     }
 
-    Column(Modifier.fillMaxSize().imePadding()) {
-        BackBar(onBack, backLabel = "Back to your books")
-        TitleText("Add a book", Modifier.padding(horizontal = ScreenPadding))
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Title, author or ISBN", style = AppType.Body, color = Palette.Muted) },
-            singleLine = true,
-            textStyle = AppType.Body,
-            shape = ButtonShape,
-            colors = appTextFieldColors(),
-            keyboardOptions = KeyboardOptions(
-                capitalization = KeyboardCapitalization.Words,
-                imeAction = ImeAction.Search,
-            ),
-            keyboardActions = KeyboardActions(onSearch = { runSearch() }),
-            trailingIcon = { IconAction(LineIcons.Barcode, "Scan the barcode on the back cover", { scanning = true }) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = ScreenPadding)
-                .padding(top = 16.dp)
-                .semantics { contentDescription = "Search for a book by title, author or ISBN" },
-        )
+    val searchFocus = remember { FocusRequester() }
+    // Nothing has been searched for yet, so the keyboard comes up ready for the title.
+    LaunchedEffect(Unit) { if (query.isEmpty()) searchFocus.requestFocus() }
 
+    Column(Modifier.fillMaxSize().imePadding()) {
+        SearchBar(
+            query = query,
+            onQueryChange = { query = it },
+            placeholder = "Title, author or ISBN",
+            onBack = onBack,
+            backLabel = "Back to your books",
+            onSearch = { runSearch() },
+            focusRequester = searchFocus,
+            modifier = Modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 8.dp),
+        ) {
+            IconAction(LineIcons.Barcode, "Scan the barcode on the back cover", { scanning = true })
+        }
+
+        val card = Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp)
         LazyColumn(Modifier.weight(1f)) {
             when (val state = search) {
                 SearchState.Idle -> item(key = "idle") {
-                    Note {
-                        MetaText("Search, or scan the barcode on the back cover. Then tap your edition to add it.")
-                        if (query.isNotBlank()) QuietButton("Search", { runSearch() })
-                    }
+                    MetaText(
+                        "Search by title, author or ISBN, or scan the barcode on the back cover. " +
+                            "Then tap your edition to add it.",
+                        Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp),
+                    )
                 }
 
                 SearchState.Searching -> item(key = "searching") {
-                    Note { MetaText("Searching…", Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+                    Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp)) {
+                        MetaText("Searching Open Library…", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                        BusyLine(Modifier.padding(top = 12.dp))
+                    }
                 }
 
                 is SearchState.Done -> when (val outcome = state.outcome) {
                     is SearchOutcome.Found -> {
+                        item(key = "count") {
+                            val count = outcome.results.size
+                            MetaText(
+                                "$count result${if (count == 1) "" else "s"} · from Open Library",
+                                Modifier
+                                    .padding(horizontal = ScreenPadding)
+                                    .padding(top = 8.dp, bottom = 4.dp)
+                                    .semantics { liveRegion = LiveRegionMode.Polite },
+                            )
+                        }
                         // Keyed by position as well: Open Library can list one book twice, and two rows may not share a key.
                         itemsIndexed(outcome.results, key = { index, result -> "$index-${result.volumeId}" }) { _, result ->
                             ResultRow(result, enabled = !adding, onAdd = { add(result) })
-                            Hairline(Modifier.padding(horizontal = ScreenPadding))
                         }
                         item(key = "footer") {
-                            Note {
-                                BodyText("Can't find your edition?")
-                                MetaText("Page counts differ between editions, and your progress depends on the right one.")
-                                QuietButton("Add it by hand", { byHand = true })
+                            Column(Modifier.padding(top = 8.dp)) {
+                                Hairline(Modifier.padding(horizontal = ScreenPadding))
+                                BodyText("Can't find your edition?", Modifier.padding(horizontal = ScreenPadding).padding(top = 16.dp))
+                                SmallText(
+                                    "Page counts differ between editions, and your progress depends on the right one.",
+                                    Modifier.padding(horizontal = ScreenPadding).padding(top = 2.dp),
+                                )
+                                TextAction(
+                                    "Add it yourself with a cover photo",
+                                    { byHand = true },
+                                    Modifier.padding(start = 12.dp, top = 4.dp),
+                                    icon = LineIcons.Camera,
+                                )
                             }
                         }
                     }
 
                     SearchOutcome.NoResults -> item(key = "none") {
-                        Note {
-                            BodyText(
-                                "No books found for “${state.query}”.",
-                                Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                        StateCard("No books match “${state.query}”", card) {
+                            BodyText("Check the spelling, search by the author, or scan the barcode on the back.")
+                            TextAction(
+                                "Add it yourself with a photo of the cover",
+                                { byHand = true },
+                                Modifier.offset(x = (-12).dp),
                             )
-                            MetaText("Check the spelling, or try fewer words.")
-                            MetaText("Try the author's name instead of the title.")
-                            QuietButton("Scan the barcode", { scanning = true })
-                            QuietButton("Add it by hand", { byHand = true })
                         }
                     }
 
                     SearchOutcome.Offline -> item(key = "offline") {
-                        Note {
+                        StateCard("No internet right now", card) {
                             BodyText(
-                                "No internet right now. Search needs a connection.",
-                                Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                "Book search needs a connection. You can add the book yourself now and the cover " +
+                                    "is filled in once you're back online.",
                             )
-                            MetaText("You can add the book by hand. With its ISBN, the cover is filled in once you're back online.")
-                            QuietButton("Try again", { runSearch(state.query) })
-                            QuietButton("Add it by hand", { byHand = true })
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RoseButton("Try again", { runSearch(state.query) })
+                                TextAction("Add it yourself", { byHand = true }, color = Palette.Ink)
+                            }
                         }
                     }
 
                     SearchOutcome.Unavailable -> item(key = "unavailable") {
-                        Note {
+                        StateCard("Book search isn't answering right now", card) {
                             BodyText(
-                                "Book search isn't answering right now.",
-                                Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                                "It relies on a free service that is sometimes busy, so it may work again later. " +
+                                    "You can add the book yourself meanwhile.",
                             )
-                            MetaText("It relies on a free service that is sometimes busy, so it may work again later. You can add the book by hand meanwhile.")
-                            QuietButton("Try again", { runSearch(state.query) })
-                            QuietButton("Add it by hand", { byHand = true })
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                RoseButton("Try again", { runSearch(state.query) })
+                                TextAction("Add it yourself", { byHand = true }, color = Palette.Ink)
+                            }
                         }
                     }
                 }
@@ -259,15 +285,6 @@ fun AddBookScreen(
     }
 }
 
-/** A block of lines and buttons under the search field, spaced the same in every state. */
-@Composable
-private fun Note(content: @Composable () -> Unit) {
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(top = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) { content() }
-}
-
 /** One edition: its cover, title, author, and the publisher, year and page count that set it apart. */
 @Composable
 private fun ResultRow(result: BookResult, enabled: Boolean, onAdd: () -> Unit) {
@@ -275,15 +292,22 @@ private fun ResultRow(result: BookResult, enabled: Boolean, onAdd: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClickLabel = "Add this book", role = Role.Button, onClick = onAdd)
+            .defaultMinSize(minHeight = 96.dp)
             .padding(horizontal = ScreenPadding, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RemoteCover(result.title, result.coverUrl, result.isbn, Modifier.width(48.dp).aspectRatio(COVER_ASPECT))
-        Column(Modifier.weight(1f).padding(start = 16.dp)) {
-            Text(result.title, style = AppType.BodyStrong, color = Palette.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+            Text(result.title, style = AppType.Heading, color = Palette.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             result.author?.let { MetaText(it, maxLines = 1) }
-            result.editionLine?.let { MetaText(it, maxLines = 1) }
+            result.editionLine?.let { SmallText(it) }
         }
+        Icon(
+            LineIcons.Plus,
+            contentDescription = null,
+            tint = if (enabled) Palette.Rose else Palette.Muted,
+            modifier = Modifier.size(24.dp),
+        )
     }
 }
 
@@ -337,13 +361,26 @@ private fun AddByHand(isbn: String, title: String, onBack: () -> Unit, onAdded: 
     }
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        BackBar(onBack, backLabel = "Back to search")
+        BackBar(onBack, backLabel = "Back to search", title = "Add it yourself")
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            TitleText("Add by hand")
             MetaText("Only the title is needed. The page count is what lets your progress be shown.")
+
+            // The cover of the reader's own copy, or the title on a blush cover until there is one.
+            Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                BookCover(
+                    bookTitle.ifBlank { "Your book" },
+                    coverPath?.let(::File),
+                    Modifier.width(64.dp).aspectRatio(COVER_ASPECT),
+                    maxSidePx = 256,
+                )
+                Column(Modifier.padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AssistChip("Take a photo of the cover", LineIcons.Camera, photos.take)
+                    AssistChip("Choose from your photos", LineIcons.Image, photos.choose)
+                }
+            }
 
             Field("Title", bookTitle, { bookTitle = it }, capitalization = KeyboardCapitalization.Words)
             Field("Author", author, { author = it }, capitalization = KeyboardCapitalization.Words)
@@ -355,19 +392,6 @@ private fun AddByHand(isbn: String, title: String, onBack: () -> Unit, onAdded: 
                 KeyboardType.Ascii,
                 supporting = "On the back cover, by the barcode. With it, the cover can be looked up.",
             )
-
-            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                BookCover(
-                    bookTitle.ifBlank { "Your book" },
-                    coverPath?.let(::File),
-                    Modifier.width(64.dp).aspectRatio(COVER_ASPECT),
-                    maxSidePx = 256,
-                )
-                Column(Modifier.padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuietButton("Take a photo of the cover", photos.take, Modifier.fillMaxWidth())
-                    QuietButton("Choose from your photos", photos.choose, Modifier.fillMaxWidth())
-                }
-            }
             Spacer(Modifier.height(8.dp))
         }
         RoseButton(
@@ -396,14 +420,14 @@ fun Field(
         label = { Text(label) },
         singleLine = true,
         textStyle = AppType.Body,
-        shape = ButtonShape,
+        shape = Corners.Field,
         colors = appTextFieldColors(),
         keyboardOptions = KeyboardOptions(
             keyboardType = keyboardType,
             capitalization = capitalization,
             imeAction = ImeAction.Next,
         ),
-        supportingText = supporting?.let { { Text(it, style = AppType.Meta) } },
+        supportingText = supporting?.let { { Text(it, style = AppType.Small) } },
         modifier = modifier.fillMaxWidth(),
     )
 }

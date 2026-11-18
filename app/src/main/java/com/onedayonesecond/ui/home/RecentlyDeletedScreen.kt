@@ -2,18 +2,21 @@ package com.onedayonesecond.ui.home
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.Alignment
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.StateCard
+import com.onedayonesecond.ui.theme.TextAction
+import com.onedayonesecond.ui.theme.TonalButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,12 +41,11 @@ import com.onedayonesecond.ui.theme.BackBar
 import com.onedayonesecond.ui.theme.BodyText
 import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
 import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TileShape
-import com.onedayonesecond.ui.theme.TitleText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.util.concurrent.TimeUnit
@@ -79,27 +81,25 @@ fun RecentlyDeletedScreen(onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack)
+        BackBar(onBack, title = "Recently deleted")
         LazyColumn(Modifier.fillMaxSize()) {
             item {
-                Column(Modifier.padding(horizontal = ScreenPadding).padding(bottom = 16.dp)) {
-                    TitleText("Recently deleted")
-                    MetaText(
-                        "Deleted and replaced seconds stay here for ${DeletedClip.KEEP_DAYS} days. " +
-                            "After that they are removed for good.",
-                        Modifier.padding(top = 2.dp),
-                    )
-                }
+                MetaText(
+                    "Deleted and replaced seconds stay here for ${DeletedClip.KEEP_DAYS} days. " +
+                        "After that they are removed for good.",
+                    Modifier.padding(horizontal = ScreenPadding).padding(top = 4.dp, bottom = 16.dp),
+                )
             }
             val rows = deleted
             if (rows != null && rows.isEmpty()) {
                 item {
-                    Hairline(Modifier.padding(horizontal = ScreenPadding))
-                    MetaText("Nothing here.", Modifier.padding(ScreenPadding))
+                    StateCard("Nothing here", Modifier.padding(horizontal = ScreenPadding)) {
+                        BodyText("A second you delete or replace waits here, in case you want it back.")
+                    }
                 }
             }
-            items(rows.orEmpty(), key = { it.id }) { clip ->
-                Hairline(Modifier.padding(horizontal = ScreenPadding))
+            itemsIndexed(rows.orEmpty(), key = { _, clip -> clip.id }) { index, clip ->
+                if (index > 0) Hairline(Modifier.padding(horizontal = ScreenPadding))
                 DeletedRow(
                     clip = clip,
                     onRestore = { restore(clip, replace = false) },
@@ -114,14 +114,13 @@ fun RecentlyDeletedScreen(onBack: () -> Unit) {
             onDismiss = { confirmReplace = null },
             title = "${RecapLabels.dayAndMonth(clip.date)} has a second now",
             buttons = {
-                QuietButton("Cancel", { confirmReplace = null }, Modifier.weight(1f))
+                TextAction("Cancel", { confirmReplace = null })
                 RoseButton(
                     "Swap them",
                     {
                         confirmReplace = null
                         restore(clip, replace = true)
                     },
-                    Modifier.weight(1f),
                 )
             },
         ) {
@@ -137,14 +136,14 @@ fun RecentlyDeletedScreen(onBack: () -> Unit) {
             onDismiss = { confirmForever = null },
             title = "Remove for good?",
             buttons = {
-                QuietButton("Keep it", { confirmForever = null }, Modifier.weight(1f))
+                TextAction("Keep it", { confirmForever = null })
                 QuietButton(
                     "Remove for good",
                     {
                         confirmForever = null
                         container.appScope.launch { repository.deleteForever(clip.id) }
                     },
-                    Modifier.weight(1f),
+                    color = Palette.Error,
                 )
             },
         ) {
@@ -167,7 +166,7 @@ private fun DeletedRow(clip: DeletedClip, onRestore: () -> Unit, onForever: () -
         TimeUnit.MILLISECONDS.toDays(System.currentTimeMillis() - clip.deletedAt).coerceIn(0, DeletedClip.KEEP_DAYS)
 
     Row(Modifier.padding(horizontal = ScreenPadding, vertical = 16.dp)) {
-        Box(Modifier.width(54.dp).aspectRatio(CLIP_ASPECT).clip(TileShape).background(Palette.Blush)) {
+        Box(Modifier.width(54.dp).aspectRatio(CLIP_ASPECT).clip(Corners.Frame).background(Palette.Blush)) {
             if (picture != null) {
                 Image(picture, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             }
@@ -176,17 +175,17 @@ private fun DeletedRow(clip: DeletedClip, onRestore: () -> Unit, onForever: () -
         Column(Modifier.weight(1f)) {
             BodyText(RecapLabels.fullDate(clip.date))
             if (clip.caption.isNotEmpty()) MetaText(clip.caption, maxLines = 2)
-            MetaText(
+            SmallText(
                 when (daysLeft) {
                     0L -> "Removed for good today"
                     1L -> "1 day left"
                     else -> "$daysLeft days left"
                 },
+                Modifier.padding(top = 2.dp),
             )
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                QuietButton("Put back", onRestore)
-                QuietButton("Remove", onForever, color = Palette.Muted)
+            Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                TonalButton("Put back", onRestore)
+                TextAction("Remove", onForever, color = Palette.Error)
             }
         }
     }

@@ -1,5 +1,7 @@
 package com.onedayonesecond.ui.home
 
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -9,6 +11,7 @@ import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.AppContainer
 import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.data.ClipEntity
+import com.onedayonesecond.data.Mood
 import com.onedayonesecond.data.ClipRepository
 import com.onedayonesecond.media.GalleryAccessLevel
 import com.onedayonesecond.media.GalleryScanner
@@ -27,6 +30,8 @@ import java.time.YearMonth
 data class HomeUiState(
     val month: YearMonth = YearMonth.now(),
     val clipsByDate: Map<LocalDate, ClipEntity> = emptyMap(),
+    /** The mood picked for each day of the shown month, where one was picked. */
+    val moodsByDate: Map<LocalDate, Mood> = emptyMap(),
     /** Days of the shown month that have a second. */
     val keptInMonth: Int = 0,
     /** Days of the shown month that have happened: all of them for a past month. */
@@ -34,8 +39,6 @@ data class HomeUiState(
     val hasClipToday: Boolean = false,
     /** Today's place, for the "Add to today" sheet. Null when unknown or switched off. */
     val todayPlace: String? = null,
-    /** How many seconds are waiting in Recently deleted. */
-    val deletedCount: Int = 0,
     /** How many gallery videos were made on each day. Empty until access is granted. */
     val galleryCounts: Map<LocalDate, Int> = emptyMap(),
     /** Days that have gallery videos but no clip yet, newest first. */
@@ -47,6 +50,8 @@ data class HomeUiState(
 @UnstableApi
 class HomeViewModel(container: AppContainer) : ViewModel() {
 
+    private val prefs = container.journalPrefs
+
     private val repository: ClipRepository = container.repository
     private val scanner: GalleryScanner = container.galleryScanner
     private val _month = MutableStateFlow(YearMonth.now())
@@ -57,25 +62,32 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         repository.observeBetween(month.atDay(1), month.atEndOfMonth())
     }
 
+    private val monthMoods = _month.flatMapLatest { month ->
+        container.journal.observeMetaBetween(month.atDay(1), month.atEndOfMonth())
+    }
+
+    // Clips and moods travel together, which keeps the big combine below at five flows.
+    private val monthDays = combine(monthClips, monthMoods) { clips, metas ->
+        clips to metas.mapNotNull { meta -> meta.mood?.let { meta.date to it } }.toMap()
+    }
+
     private val galleryState = combine(gallery, galleryAccess) { byDate, access -> byDate to access }
 
-    private val aside = combine(
-        repository.observeDeleted(),
-        container.journal.observeMeta(LocalDate.now()),
-    ) { deleted, todayMeta -> deleted.size to todayMeta?.placeName }
+    private val todayPlace = container.journal.observeMeta(LocalDate.now()).map { it?.placeName }
 
     val state: StateFlow<HomeUiState> = combine(
         _month,
-        monthClips,
+        monthDays,
         repository.observeAll(),
         galleryState,
-        aside,
-    ) { month, clips, all, (galleryByDate, access), (deletedCount, todayPlace) ->
+        todayPlace,
+    ) { month, (clips, moods), all, (galleryByDate, access), todayPlace ->
         val today = LocalDate.now()
         val clipDates = all.mapTo(HashSet()) { it.date }
         HomeUiState(
             month = month,
             clipsByDate = clips.associateBy { it.date },
+            moodsByDate = moods,
             keptInMonth = clips.size,
             daysSoFar = when {
                 month < YearMonth.from(today) -> month.lengthOfMonth()
@@ -84,7 +96,6 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
             },
             hasClipToday = today in clipDates,
             todayPlace = todayPlace,
-            deletedCount = deletedCount,
             galleryCounts = galleryByDate.mapValues { it.value.size },
             unusedGalleryDays = galleryByDate.keys
                 .filter { it !in clipDates && !it.isAfter(today) }
@@ -118,6 +129,9 @@ class HomeViewModel(container: AppContainer) : ViewModel() {
         // current month.
         if (_month.value < YearMonth.now()) _month.value = _month.value.plusMonths(1)
     }
+
+    /** Whether the daily reminder is switched on in Settings. */
+    suspend fun reminderEnabled(): Boolean = prefs.reminderEnabled.first()
 
     companion object {
         val Factory = viewModelFactory {

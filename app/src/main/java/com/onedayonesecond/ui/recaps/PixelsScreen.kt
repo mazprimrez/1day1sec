@@ -8,7 +8,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,6 +22,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
+import com.onedayonesecond.journal.PixelKind
+import com.onedayonesecond.ui.theme.HeadlineText
+import com.onedayonesecond.ui.theme.SmallText
+import kotlin.math.roundToInt
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -57,7 +72,6 @@ import com.onedayonesecond.ui.theme.MetaText
 import com.onedayonesecond.ui.theme.Palette
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -133,19 +147,29 @@ class PixelsViewModel(
 }
 
 /**
- * A whole year on one page: a column for each month, a row for each day, each cell
- * the colour of that day's mood. A day without a mood is an empty outline; days still
- * to come are faint dots.
+ * A whole year on one page: a column for each month, a row for each day, each square
+ * the colour of that day's mood. A day without a mood is a dashed outline; days still
+ * to come are left empty. Tapping a square opens its day.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @UnstableApi
 @Composable
 fun PixelsScreen(
     onBack: () -> Unit,
+    onOpenDay: (LocalDate) -> Unit,
     viewModel: PixelsViewModel = viewModel(factory = PixelsViewModel.Factory),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val counts = JournalMath.moodCounts(state.moods.values)
     val locale = Locale.getDefault()
+    val isThisYear = state.year == state.today.year
+    // Days that have happened and have no mood.
+    val unmarked = remember(state.year, state.moods, state.today) {
+        val last = if (isThisYear) state.today else LocalDate.of(state.year, 12, 31)
+        if (state.year > state.today.year) 0 else last.dayOfYear - state.moods.keys.count { !it.isAfter(last) }
+    }
+    val bright = (counts[Mood.GOOD] ?: 0) + (counts[Mood.GREAT] ?: 0)
+    val share = if (state.moods.isEmpty()) null else (bright * 100f / state.moods.size).roundToInt()
 
     // Only phones before Android 10 need permission to save a picture to the gallery.
     val storagePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -153,96 +177,158 @@ fun PixelsScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack)
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
-            Row(
-                Modifier.padding(start = ScreenPadding, end = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TitleText("${state.year} in pixels", Modifier.weight(1f))
+        BackBar(onBack, title = "Year in pixels")
+        Column(
+            Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(start = ScreenPadding, top = 4.dp, end = ScreenPadding, bottom = 36.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HeadlineText(if (isThisYear) "${state.year} so far" else state.year.toString(), Modifier.weight(1f))
                 IconAction(LineIcons.ChevronLeft, "Earlier year", { viewModel.showYear(state.year - 1) })
                 IconAction(
                     LineIcons.ChevronRight,
                     "Later year",
                     { viewModel.showYear(state.year + 1) },
                     enabled = state.year < state.today.year,
+                    modifier = Modifier.offset(x = 12.dp),
                 )
             }
+            MetaText(
+                "One square per day, from the mood you picked. Darker is a harder day." +
+                    when {
+                        share == null -> ""
+                        isThisYear -> " $share% of your days so far were good or great."
+                        else -> " $share% of your days were good or great."
+                    },
+                Modifier.padding(top = 4.dp),
+                color = Palette.Ink,
+            )
 
             // The grid is one picture to a screen reader; the legend below says the same in words.
             val summary = Mood.entries.reversed().joinToString(", ") { "${counts[it] ?: 0} ${it.label.lowercase()}" }
             Column(
                 Modifier
-                    .padding(horizontal = ScreenPadding)
-                    .padding(top = 16.dp)
-                    .clearAndSetSemantics { contentDescription = "Moods of ${state.year}, day by day. $summary." },
+                    .padding(top = 20.dp)
+                    .semantics { contentDescription = "Mood for every day of ${state.year}, one column per month. $summary." },
             ) {
-                Row {
+                Row(Modifier.clearAndSetSemantics { }, horizontalArrangement = Arrangement.spacedBy(PIXEL_GAP)) {
                     Spacer(Modifier.width(DAY_LABEL_WIDTH))
                     (1..Pixels.MONTHS).forEach { month ->
                         Text(
                             Month.of(month).getDisplayName(TextStyle.NARROW, locale),
-                            style = AppType.Meta,
+                            style = AppType.FrameNumber,
                             color = Palette.Muted,
                             textAlign = TextAlign.Center,
                             modifier = Modifier.weight(1f),
                         )
                     }
                 }
-                // The grid's height follows from its width, so it is worked out here and
-                // given to the day numbers too, which keeps each number level with its row.
-                BoxWithConstraints(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                    val gridHeight = (maxWidth - DAY_LABEL_WIDTH) * Pixels.DAYS / Pixels.MONTHS
-                    Row(Modifier.height(gridHeight)) {
-                        Column(Modifier.width(DAY_LABEL_WIDTH).fillMaxHeight()) {
-                            (1..Pixels.DAYS).forEach { day ->
-                                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                                    // The 1st and every fifth day are numbered.
-                                    if (day == 1 || day % 5 == 0) {
-                                        Text(day.toString(), style = AppType.Meta, color = Palette.Muted)
-                                    }
+                Row(
+                    Modifier.padding(top = 4.dp).height(PIXEL_HEIGHT * Pixels.DAYS + PIXEL_GAP * (Pixels.DAYS - 1)),
+                    horizontalArrangement = Arrangement.spacedBy(PIXEL_GAP),
+                ) {
+                    Column(
+                        Modifier.width(DAY_LABEL_WIDTH).fillMaxHeight().clearAndSetSemantics { },
+                        verticalArrangement = Arrangement.spacedBy(PIXEL_GAP),
+                    ) {
+                        (1..Pixels.DAYS).forEach { day ->
+                            Box(Modifier.height(PIXEL_HEIGHT).fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                                // The 1st and every fifth day are numbered.
+                                if (day == 1 || day % 5 == 0) {
+                                    Text(day.toString(), style = AppType.FrameNumber, color = Palette.Muted)
                                 }
                             }
                         }
-                        Canvas(Modifier.weight(1f).fillMaxHeight()) {
-                            drawPixels(state.year, state.moods, state.today, gapFraction = 0.14f)
-                        }
+                    }
+                    Canvas(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .pointerInput(state.year, state.today) {
+                                detectTapGestures { tap ->
+                                    val month = (tap.x / size.width * Pixels.MONTHS).toInt() + 1
+                                    val day = (tap.y / size.height * Pixels.DAYS).toInt() + 1
+                                    if (month in 1..Pixels.MONTHS && day in 1..Pixels.DAYS) {
+                                        val kind = Pixels.at(state.year, month, day, state.moods, state.today).kind
+                                        if (kind == PixelKind.MOOD || kind == PixelKind.EMPTY) {
+                                            onOpenDay(LocalDate.of(state.year, month, day))
+                                        }
+                                    }
+                                }
+                            },
+                    ) {
+                        drawPixels(state.year, state.moods, state.today, gap = PIXEL_GAP.toPx(), corner = 4.dp.toPx())
                     }
                 }
             }
 
-            Column(
-                Modifier.padding(horizontal = ScreenPadding).padding(top = 24.dp, bottom = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            // What each colour is, with how many days wear it. The words carry the meaning;
+            // the colour only repeats it.
+            FlowRow(
+                Modifier.padding(top = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Mood.entries.reversed().forEach { mood ->
-                    val days = counts[mood] ?: 0
-                    Row(
-                        Modifier.semantics(mergeDescendants = true) { },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(Modifier.size(20.dp).clip(RoundedCornerShape(4.dp)).background(Palette.mood(mood)))
-                        Text(mood.label, style = AppType.Body, color = Palette.Ink, modifier = Modifier.padding(start = 12.dp).weight(1f))
-                        MetaText("$days day${if (days == 1) "" else "s"}")
+                    LegendItem(mood.label, counts[mood] ?: 0) {
+                        Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(Palette.mood(mood)))
                     }
                 }
-                MetaText("An empty outline is a day without a mood. Darker is a harder day.")
-            }
-        }
-
-        RoseButton(
-            if (state.saving) "Saving…" else "Download PNG",
-            onClick = {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                    storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                } else {
-                    viewModel.download()
+                LegendItem("No entry", unmarked) {
+                    Canvas(Modifier.size(12.dp)) {
+                        val line = 1.dp.toPx()
+                        drawRoundRect(
+                            Palette.PixelEmpty,
+                            topLeft = Offset(line / 2, line / 2),
+                            size = Size(size.width - line, size.height - line),
+                            cornerRadius = CornerRadius(3.dp.toPx()),
+                            style = Stroke(line, pathEffect = PathEffect.dashPathEffect(floatArrayOf(3.dp.toPx(), 2.dp.toPx()))),
+                        )
+                    }
                 }
-            },
-            enabled = !state.saving,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 12.dp),
+            }
+
+            RoseButton(
+                if (state.saving) "Saving…" else "Download PNG",
+                onClick = {
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                        storagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                    } else {
+                        viewModel.download()
+                    }
+                },
+                enabled = !state.saving,
+                icon = LineIcons.Download,
+                modifier = Modifier.fillMaxWidth().padding(top = 28.dp),
+            )
+            SmallText(
+                "Saves a 1080 × 1920 image to your gallery, sized for stories.",
+                Modifier.fillMaxWidth().padding(top = 10.dp).wrapContentWidth(Alignment.CenterHorizontally),
+            )
+        }
+    }
+}
+
+/** A swatch, what it stands for, and how many days it covers. */
+@Composable
+private fun LegendItem(label: String, days: Int, swatch: @Composable () -> Unit) {
+    Row(
+        Modifier.semantics(mergeDescendants = true) { contentDescription = "$label, $days day${if (days == 1) "" else "s"}" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        swatch()
+        Text(label, style = AppType.Tab, color = Palette.Ink, modifier = Modifier.padding(start = 6.dp).clearAndSetSemantics { })
+        Text(
+            days.toString(),
+            style = AppType.Small,
+            color = Palette.Muted,
+            modifier = Modifier.padding(start = 6.dp).clearAndSetSemantics { },
         )
     }
 }
 
-private val DAY_LABEL_WIDTH = 28.dp
+private val DAY_LABEL_WIDTH = 22.dp
+private val PIXEL_HEIGHT = 20.dp
+private val PIXEL_GAP = 3.dp

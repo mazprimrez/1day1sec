@@ -26,7 +26,11 @@ import kotlin.coroutines.resume
  * the coordinates themselves are never stored. Without location permission, or when
  * the phone cannot tell, the answer is simply null and place lines are left out.
  */
-class PlaceFinder(context: Context) {
+class PlaceFinder(
+    context: Context,
+    /** Whether entries are to be tagged at all: the switch in Settings. */
+    private val enabled: suspend () -> Boolean = { true },
+) {
 
     private val appContext = context.applicationContext
     private val client by lazy { LocationServices.getFusedLocationProviderClient(appContext) }
@@ -36,9 +40,9 @@ class PlaceFinder(context: Context) {
             ContextCompat.checkSelfPermission(appContext, it) == PackageManager.PERMISSION_GRANTED
         }
 
-    /** Null when not allowed, not known within a few seconds, or not nameable. Never throws. */
+    /** Null when switched off, not allowed, not known within a few seconds, or not nameable. Never throws. */
     suspend fun current(): String? {
-        if (!hasPermission) return null
+        if (!hasPermission || !enabled()) return null
         return try {
             withTimeoutOrNull(TIMEOUT_MS) {
                 val location = fix() ?: return@withTimeoutOrNull null

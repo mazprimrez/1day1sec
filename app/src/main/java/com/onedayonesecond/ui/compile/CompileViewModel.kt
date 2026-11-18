@@ -23,10 +23,16 @@ import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+/** Which days go into the reel. The labels are short because they sit side by side. */
 enum class RangeOption(val label: String) {
-    ALL_TIME("All time"),
-    LAST_30_DAYS("Last 30 days"),
-    THIS_MONTH("This month"),
+    THIS_YEAR("Year"),
+    LAST_30_DAYS("30 days"),
+    LAST_7_DAYS("Week");
+
+    companion object {
+        /** The range saved under [name], or the year when nothing (or something unknown) is saved. */
+        fun named(name: String?): RangeOption = entries.firstOrNull { it.name == name } ?: THIS_YEAR
+    }
 }
 
 /**
@@ -36,7 +42,14 @@ enum class RangeOption(val label: String) {
 enum class CompilePhase { IDLE, COMPILING, READY, EXPORTING, EXPORTED }
 
 data class CompileUiState(
-    val range: RangeOption = RangeOption.ALL_TIME,
+    val range: RangeOption = RangeOption.THIS_YEAR,
+    /** The range a reel starts with, kept between runs of the app. */
+    val startRange: RangeOption = RangeOption.THIS_YEAR,
+    /** The first and last day of the range. */
+    val rangeStart: LocalDate = LocalDate.now(),
+    val rangeEnd: LocalDate = LocalDate.now(),
+    /** The range's seconds, oldest first: the frames of the timeline. */
+    val clips: List<ClipEntity> = emptyList(),
     val clipCount: Int = 0,
     val phase: CompilePhase = CompilePhase.IDLE,
     val progress: Float = 0f,
@@ -53,7 +66,25 @@ data class CompileUiState(
     val previewClip: ClipEntity? = null,
     val dateStyle: DateLabelStyle = DateLabelStyle(),
     val error: String? = null,
-)
+) {
+    /** "Date and caption, bottom left": what is printed on each second, in a line. */
+    val textSummary: String
+        get() {
+            val parts = listOfNotNull(
+                "date".takeIf { showDates },
+                "caption".takeIf { showCaptions },
+                "place".takeIf { showPlaces },
+            )
+            val list = when (parts.size) {
+                0 -> return "No text"
+                1 -> parts[0]
+                2 -> "${parts[0]} and ${parts[1]}"
+                else -> "${parts[0]}, ${parts[1]} and ${parts[2]}"
+            }
+            return list.replaceFirstChar { it.uppercase() } +
+                ", ${dateStyle.edge.label.lowercase()} ${dateStyle.align.label.lowercase()}"
+        }
+}
 
 @UnstableApi
 class CompileViewModel(private val container: AppContainer) : ViewModel() {
@@ -64,89 +95,74 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
     private var job: Job? = null
 
     init {
-        refreshCount()
         viewModelScope.launch {
             val saved = container.dateStyleStore.load()
-            _state.update { it.copy(dateStyle = saved) }
+            _state.update {
+                it.copy(
+                    dateStyle = saved.style,
+                    showDates = saved.showDates,
+                    showCaptions = saved.showCaptions,
+                    showPlaces = saved.showPlaces,
+                    range = RangeOption.named(saved.startRange),
+                    startRange = RangeOption.named(saved.startRange),
+                )
+            }
+            refreshCount()
         }
     }
 
+    /** For this reel only: the range chosen on the Reel tab. The one a reel starts with is [setStartRange]. */
     fun selectRange(range: RangeOption) {
-        _state.update {
-            it.copy(
-                range = range,
-                // Any previously built reel belongs to the old range.
-                phase = CompilePhase.IDLE,
-                reelFile = null,
-                exportedName = null,
-                progress = 0f,
-            )
-        }
+        if (range == _state.value.range) return
+        _state.update { it.withoutReel().copy(range = range) }
         refreshCount()
     }
 
-    fun setShowDates(show: Boolean) {
-        _state.update {
-            it.copy(
-                showDates = show,
-                // A reel built with the old setting no longer matches the toggle.
-                phase = CompilePhase.IDLE,
-                reelFile = null,
-                exportedName = null,
-                progress = 0f,
-            )
-        }
+    /** The range a reel starts with from now on, chosen in Settings. It becomes the current range too. */
+    fun setStartRange(range: RangeOption) {
+        _state.update { it.copy(startRange = range) }
+        viewModelScope.launch { container.dateStyleStore.saveStartRange(range.name) }
+        selectRange(range)
     }
 
-    fun setShowCaptions(show: Boolean) {
-        _state.update {
-            it.copy(
-                showCaptions = show,
-                // A reel built with the old setting no longer matches the toggle.
-                phase = CompilePhase.IDLE,
-                reelFile = null,
-                exportedName = null,
-                progress = 0f,
-            )
-        }
-    }
+    fun setShowDates(show: Boolean) = setShown { it.copy(showDates = show) }
 
-    fun setShowPlaces(show: Boolean) {
-        _state.update {
-            it.copy(
-                showPlaces = show,
-                // A reel built with the old setting no longer matches the toggle.
-                phase = CompilePhase.IDLE,
-                reelFile = null,
-                exportedName = null,
-                progress = 0f,
-            )
-        }
+    fun setShowCaptions(show: Boolean) = setShown { it.copy(showCaptions = show) }
+
+    fun setShowPlaces(show: Boolean) = setShown { it.copy(showPlaces = show) }
+
+    private fun setShown(change: (CompileUiState) -> CompileUiState) {
+        // A reel built with the old setting no longer matches the switch.
+        _state.update { change(it.withoutReel()) }
+        val now = _state.value
+        viewModelScope.launch { container.dateStyleStore.saveShown(now.showDates, now.showCaptions, now.showPlaces) }
     }
 
     fun setDateStyle(style: DateLabelStyle) {
         if (style == _state.value.dateStyle) return
-        _state.update {
-            it.copy(
-                dateStyle = style,
-                // A reel built with the old style no longer matches the choice.
-                phase = CompilePhase.IDLE,
-                reelFile = null,
-                exportedName = null,
-                progress = 0f,
-            )
-        }
+        // A reel built with the old style no longer matches the choice.
+        _state.update { it.withoutReel().copy(dateStyle = style) }
         viewModelScope.launch { container.dateStyleStore.save(style) }
     }
+
+    /** Any reel already built belongs to the settings it was built with. */
+    private fun CompileUiState.withoutReel() =
+        copy(phase = CompilePhase.IDLE, reelFile = null, exportedName = null, progress = 0f)
 
     /** Also called when the tab is returned to, since seconds may have been added meanwhile. */
     fun refreshCount() {
         viewModelScope.launch {
-            val (start, end) = resolveRange(_state.value.range)
+            val range = _state.value.range
+            val (start, end) = resolveRange(range)
             val clips = container.repository.clipsBetween(start, end)
             val places = placesBetween(start, end)
             _state.update {
+                // The range may have been changed while this was reading; that change does its own count.
+                if (it.range != range) return@update it
                 it.copy(
+                    rangeStart = start,
+                    rangeEnd = end,
+                    clips = clips,
                     clipCount = clips.size,
                     captionCount = clips.count { clip -> clip.caption.isNotEmpty() },
                     placeCount = clips.count { clip -> clip.date in places },
@@ -244,13 +260,12 @@ class CompileViewModel(private val container: AppContainer) : ViewModel() {
         _state.update { it.copy(error = null) }
     }
 
-    private suspend fun resolveRange(range: RangeOption): Pair<LocalDate, LocalDate> {
+    private fun resolveRange(range: RangeOption): Pair<LocalDate, LocalDate> {
         val today = LocalDate.now()
         return when (range) {
-            RangeOption.ALL_TIME ->
-                (container.repository.earliestDate() ?: today) to today
+            RangeOption.THIS_YEAR -> today.withDayOfYear(1) to today
             RangeOption.LAST_30_DAYS -> today.minusDays(29) to today
-            RangeOption.THIS_MONTH -> today.withDayOfMonth(1) to today
+            RangeOption.LAST_7_DAYS -> today.minusDays(6) to today
         }
     }
 

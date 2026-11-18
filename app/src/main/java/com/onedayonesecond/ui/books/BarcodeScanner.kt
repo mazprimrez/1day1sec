@@ -17,10 +17,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
+import com.onedayonesecond.ui.theme.BackBar
+import com.onedayonesecond.ui.theme.Corners
+import com.onedayonesecond.ui.theme.StateCard
+import com.onedayonesecond.ui.theme.TextAction
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -50,10 +55,8 @@ import com.onedayonesecond.ui.theme.BodyText
 import com.onedayonesecond.ui.theme.IconAction
 import com.onedayonesecond.ui.theme.LineIcons
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -144,12 +147,12 @@ fun BarcodeScanner(onIsbn: (String) -> Unit, onClose: () -> Unit) {
             AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
             Text(
                 "Hold the barcode on the back cover in view.",
-                style = AppType.Body,
+                style = AppType.Meta,
                 color = Palette.Paper,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(ScreenPadding)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(Corners.Chip)
                     .background(Palette.Ink.copy(alpha = 0.78f))
                     .padding(horizontal = 16.dp, vertical = 12.dp)
                     .semantics { liveRegion = LiveRegionMode.Polite },
@@ -164,28 +167,32 @@ fun BarcodeScanner(onIsbn: (String) -> Unit, onClose: () -> Unit) {
                 IconAction(LineIcons.Close, "Stop scanning", onClose, tint = Palette.Paper)
             }
         } else {
-            Column(
-                Modifier.fillMaxSize().padding(horizontal = ScreenPadding),
-                verticalArrangement = Arrangement.Center,
-            ) {
-                TitleText("Scan the barcode")
-                BodyText(
-                    problem ?: if (asked) {
-                        "The camera isn't allowed for Kilasan. Allow it in your phone's Settings, under Apps, " +
-                            "or type the ISBN from the back cover instead."
-                    } else {
-                        "Kilasan needs the camera to read the barcode on the back cover."
-                    },
-                    Modifier.padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
-                )
-                if (problem == null) {
-                    RoseButton(
-                        "Allow the camera",
-                        { permission.launch(Manifest.permission.CAMERA) },
-                        Modifier.fillMaxWidth().padding(top = 20.dp),
+            Column(Modifier.fillMaxSize()) {
+                BackBar(onClose, backLabel = "Back to search", title = "Scan the barcode", backIcon = LineIcons.Close)
+                StateCard(
+                    if (problem != null) "The camera couldn't start" else "The camera is needed",
+                    Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp),
+                ) {
+                    BodyText(
+                        problem ?: if (asked) {
+                            "The camera isn't allowed for Kilasan. Allow it in your phone's Settings, under Apps, " +
+                                "or type the ISBN from the back cover instead."
+                        } else {
+                            "Kilasan needs the camera to read the barcode on the back cover."
+                        },
                     )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (problem == null) {
+                            RoseButton("Allow the camera", { permission.launch(Manifest.permission.CAMERA) })
+                        }
+                        TextAction(
+                            "Type the ISBN",
+                            onClose,
+                            if (problem == null) Modifier else Modifier.offset(x = (-12).dp),
+                            color = if (problem == null) Palette.Ink else Palette.Rose,
+                        )
+                    }
                 }
-                QuietButton("Type the ISBN instead", onClose, Modifier.fillMaxWidth().padding(top = 8.dp))
             }
         }
     }

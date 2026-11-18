@@ -15,6 +15,13 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import com.onedayonesecond.ui.theme.AppType
+import com.onedayonesecond.ui.theme.BusyLine
+import com.onedayonesecond.ui.theme.InlineAlert
+import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.StateCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -39,11 +46,10 @@ import com.onedayonesecond.ui.common.PHOTO_ASPECT
 import com.onedayonesecond.ui.theme.BackBar
 import com.onedayonesecond.ui.theme.BodyText
 import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
 import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TileShape
-import com.onedayonesecond.ui.theme.TitleText
 import java.io.File
 import java.time.Instant
 import java.time.ZoneId
@@ -71,22 +77,22 @@ fun GalleryDayScreen(
     }
 
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack)
+        BackBar(onBack, title = "Videos from this day")
         Column(
             modifier = Modifier.weight(1f).padding(horizontal = ScreenPadding),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Column {
-                TitleText("Videos from this day")
-                MetaText(RecapLabels.fullDate(state.date), Modifier.padding(top = 2.dp))
-            }
+            SmallText(RecapLabels.fullDate(state.date), Modifier.padding(top = 4.dp))
             when {
-                state.loading -> Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(32.dp), color = Palette.Rose, strokeWidth = 2.dp)
+                state.loading -> Column(Modifier.weight(1f).fillMaxWidth()) {
+                    MetaText("Looking through your gallery…", Modifier.semantics { liveRegion = LiveRegionMode.Polite })
+                    BusyLine(Modifier.padding(top = 12.dp))
                 }
 
-                state.videos.isEmpty() -> Box(Modifier.weight(1f).fillMaxWidth(), Alignment.Center) {
-                    BodyText("No videos from this day were found on your phone.")
+                state.videos.isEmpty() -> Column(Modifier.weight(1f).fillMaxWidth()) {
+                    StateCard("No videos from this day") {
+                        BodyText("Nothing filmed on this day was found on your phone. You can still record a second for it now.")
+                    }
                 }
 
                 else -> {
@@ -113,7 +119,9 @@ fun GalleryDayScreen(
                 }
             }
 
-            state.error?.let { BodyText(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
+            state.error?.let {
+                InlineAlert(it, Modifier.semantics { liveRegion = LiveRegionMode.Polite }, icon = LineIcons.Warning)
+            }
         }
 
         QuietButton(
@@ -121,6 +129,7 @@ fun GalleryDayScreen(
             onRecordInstead,
             Modifier.fillMaxWidth().padding(horizontal = ScreenPadding, vertical = 12.dp),
             enabled = state.importingId == null,
+            icon = LineIcons.Camera,
         )
     }
 }
@@ -141,11 +150,11 @@ private fun VideoTile(
 
     Column(
         Modifier
-            .clip(TileShape)
+            .clip(Corners.Frame)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics(mergeDescendants = true) { contentDescription = "Video from $time, $length long" },
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(PHOTO_ASPECT).clip(TileShape).background(Palette.Blush)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(PHOTO_ASPECT).clip(Corners.Frame).background(Palette.Blush)) {
             image?.let {
                 Image(
                     bitmap = it,
@@ -163,8 +172,14 @@ private fun VideoTile(
                 }
             }
         }
-        // Under the picture rather than over it: no dark band on the footage.
-        MetaText("$time, $length", Modifier.padding(top = 4.dp), maxLines = 1)
+        // Under the picture rather than over it, as a frame's number is: no dark band on the footage.
+        Text(
+            "$time \u00B7 $length",
+            style = AppType.FrameNumber,
+            color = Palette.Ink,
+            maxLines = 1,
+            modifier = Modifier.padding(top = 3.dp),
+        )
     }
 }
 

@@ -71,7 +71,8 @@ class MediaStoreExporter(private val context: Context) {
             uri
         }
 
-    private companion object {
+    companion object {
+        /** The folder inside Movies that reels are saved to. */
         const val ALBUM = "Kilasan"
     }
 }

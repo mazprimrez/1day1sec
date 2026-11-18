@@ -15,34 +15,54 @@ Screens and flows were designed in a Claude canvas; exported images live in
 ---
  
 ## Look and feel
- 
-Minimal and modern, white background, pink from blog.mazprimrez.com.
- 
-### Colors (replace `ui/theme/Theme.kt`, light theme only for now)
- 
+
+**The Contact Sheet.** Every day is a numbered frame on white paper, the way frames
+are numbered on a strip of film: a 3:4 rectangle with 3 dp corners and its number in
+mono underneath. The month is a sheet of them six across, a week is a strip of seven,
+the reel's timeline is a strip numbered by day of the year. A missed day is a dashed
+frame, a day to come a faint one, today has a rose outline. The frame, its sheet and
+the shared components live in `ui/theme/` (`ContactFrame.kt`, `Components.kt`,
+`Theme.kt`). The sections further down describe what each screen holds; where they
+describe how it looks and this section disagrees, this section is right.
+
+### Colors (`Palette` in `ui/theme/Theme.kt`, light theme only for now)
+
 | Role | Hex | Use |
 |---|---|---|
 | Paper | `#FFFFFF` | Every background |
-| Ink | `#2E2329` | Text, icons |
-| Muted | `#6E6168` | Dates, secondary text, inactive tabs |
-| Rose | `#AE4A6B` | The one main action per screen, today's ring, mood faces |
-| Blush | `#FBCCDD` | Clip and photo placeholders, selected chips |
-| Hairline | `#F1E6EA` | 1 dp dividers, outlines |
- 
-Mood scale (only in mood visuals, darker = harder day):
-great `#FCE4EC`, good `#F7BDD0`, neutral `#E58AAB`, bad `#B8527A`, rough `#6E2445`.
- 
-Rules: one rose button per screen. No shadows, no tilted elements, no card
-backgrounds; separate sections with space and hairlines. Only tappable things
-get an outline.
- 
-### Type
- 
-- **Instrument Sans** for everything (Google Fonts, add to `res/font`).
-- **Instrument Serif italic** only for the quote of the week/month/year.
-- Four sizes: 28 sp titles (weight 600, letter spacing -0.8), 17 sp section
-  headings (600), 16 sp body, 14 sp meta (Muted). Tab labels 13 sp.
-- The big date on the day page is the one exception: 76 sp, 600, letter spacing -3.
+| Ink | `#2E2329` | Text, icons, the message bar |
+| Muted | `#6E6168` | Dates, secondary text, inactive tabs, field outlines |
+| Rose | `#AE4A6B` | Actions, selection, today's outline, progress, mood faces |
+| Blush | `#FBCCDD` | Fills: tab indicator, tonal buttons, selected segment, progress track |
+| Blush tint | `#FDF2F6` | Tab bar, tinted cards, search bar, circles behind list icons |
+| Hairline | `#F1E6EA` | 1 dp dividers, frames of days to come |
+| Frame line | `#E8C2D1` | Outlined buttons and chips, dashed frames of missed days |
+| Error | `#B3261E` | Things going wrong, actions that delete |
+
+Mood scale (only in the year in pixels and its export, darker = harder day):
+great `#F9D3E0`, good `#F7BDD0`, neutral `#E58AAB`, bad `#B8527A`, rough `#6E2445`.
+Everywhere else a mood is its face and its word, never a colour alone.
+
+Rules: one rose button per screen (on the tabs and the day and book pages it is the
+floating button, bottom right). Surfaces are flat; only the floating button, the
+message bar and book covers cast a shadow. No black, no grey. Sections are separated
+by space and hairlines.
+
+Corners: frame 3 dp, field 4 dp, chip 8 dp, preview and alert 12 dp, card and floating
+button 16 dp, buttons 24 dp (48 dp high), search bar 28 dp, sheet top 28 dp. Screen
+margin 24 dp.
+
+### Type (`AppType` in `ui/theme/Theme.kt`)
+
+- **Roboto Flex** for every word (one variable file in `res/font`).
+- **Spline Sans Mono** (500) only for measurements: frame numbers, timecodes, page
+  numbers, counts.
+- Sizes: 36 sp the day number, 28 sp tab titles and recap headlines, 24 sp titles
+  inside a screen or sheet, 22 sp top bar titles, 16 sp headings (600) and body,
+  14 sp meta and buttons (600), 12 sp small print, 11 sp frame numbers.
+- Words quoted back to the person who wrote them are set at 22 sp with the font's
+  slant (−10). Nothing else is slanted.
+
 ### Icons and mood faces
  
 Thin line icons, 1.4–2 dp stroke, round caps. Mood is shown as a line-drawn
@@ -80,10 +100,18 @@ Books
  ├─ "Log a thought" link on each reading row ─▶ Log a thought (that book)
  └─ Finished this year (grid) ─▶ Book page
 Reel
- ├─ Range: All time / Last 30 days / This month
- ├─ Text on each second (date, caption, place, style)
- ├─ Google Drive backup (Back up now, Restore)
+ ├─ Range: Year / 30 days / Week (for this reel; the one it starts with is in Settings)
+ ├─ Text on each second ─▶ its settings page
+ ├─ Google Drive backup ─▶ its page
  └─ Make my reel
+Settings (the gear on every tab)
+ ├─ Letters: What letters call you ─▶ name dialog · When letters arrive
+ ├─ Reminder: Daily reminder (switch) · Remind me at ─▶ time dialog
+ ├─ Reel: Text on each second ─▶ Show (date, caption, place), Font, Position,
+ │        Reel length to start with (Year / 30 days / Week) · Saves to
+ ├─ Places: Tag entries with a place (switch)
+ ├─ Backup: Google Drive ─▶ Back up now, Restore from Drive
+ └─ Your data: Recently deleted · About Kilasan
 ```
  
 ---
@@ -91,7 +119,8 @@ Reel
 ## Screens
  
 ### Days tab (`ui/home/HomeScreen.kt`)
-- Title = month name, under it "13 of 16 days kept" (Muted). Prev/next month arrows.
+- Title = month name, under it "13 of 16 days kept" (Muted). Prev/next month arrows,
+  then the Settings gear (the gear is at the end of every tab's header).
 - Calendar grid, Monday first, portrait tiles (~60 dp tall), day number bottom-left.
   - Kept: Blush fill. Missed: hairline outline. Today: 2 dp Rose ring. Future: number only.
   - Accessibility label is the full date: "Saturday, 14 November 2026".
@@ -166,11 +195,33 @@ are safe" + "Write the letter now").
 - Rose "Download PNG" → saves a 1080 × 1920 image to the gallery
   ("2026 in pixels", the grid, legend, small 1day1sec mark).
 ### Reel tab (existing compile + backup, restyled)
-- Portrait preview beside the range radios.
-- Rows: "Text on each second" (date, caption, place on/off + existing font/position
-  picker) and "Google Drive backup" (status + Back up now / Restore, which only adds
-  days missing from the phone).
-- Rose "Make my reel", "Saves to Movies/1day1sec".
+- Portrait preview beside the range's numbers; the range is Year / 30 days / Week.
+  Changing it here is for this reel only.
+- Rows: "Text on each second" and "Google Drive backup", each opening its page
+  (see Settings). Their second lines say the current state ("Date and caption,
+  bottom left", "Backed up today at 09:12").
+- Rose "Make my reel". Reels are saved to Movies/Kilasan.
+
+### Settings (`ui/settings/`)
+Reached from the gear on every tab. A back bar, then groups under quiet headings,
+each row with its icon in a tinted circle:
+- **Letters**: "What letters call you" opens a dialog with the name field, a count
+  (n / 40) and how the next letter opens; an empty name is allowed. "When letters
+  arrive" only states the schedule.
+- **Reminder**: "Daily reminder" switch (asks for notification permission when
+  switched on without it), and "Remind me at" with the time in mono, which opens a
+  dialog to type another time. The reminder still only comes if the day has no second.
+- **Reel**: "Text on each second" opens its page: a frame showing the text on the
+  newest second, Show chips (Date, Caption, Place), Font chips, Position (Left /
+  Center / Right, Bottom / Top), and "Reel length to start with" (Year / 30 days /
+  Week), which is remembered. "Saves to" states the folder.
+- **Places**: "Tag entries with a place" switch (asks for location when switched on
+  without it). Off means no place is looked up at all.
+- **Backup**: "Google Drive" opens its page: when it last ran, how many seconds,
+  entries and books are on the phone, Rose "Back up now", outlined "Restore from
+  Drive" (only adds what is missing from the phone). A run carries on when the page
+  is left.
+- **Your data**: "Recently deleted" (with its count) and "About Kilasan".
 ### Books tab (new)
 - Title "Books", + at top right opens Add a book.
 - **Reading now:** rows with a 2:3 cover (64 × 96 dp), title (tap opens the book),

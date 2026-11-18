@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import com.onedayonesecond.ui.theme.LineIcons
+import com.onedayonesecond.ui.theme.SmallText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -37,13 +39,11 @@ import androidx.media3.common.util.UnstableApi
 import com.onedayonesecond.OneDayApp
 import com.onedayonesecond.journal.RecapLabels
 import com.onedayonesecond.ui.theme.BackBar
-import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
 import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TileShape
-import com.onedayonesecond.ui.theme.TitleText
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -78,17 +78,16 @@ fun PenScreen(date: LocalDate, onDone: () -> Unit, onBack: () -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        BackBar(onBack, backLabel = "Back without saving")
+        BackBar(onBack, backLabel = "Back without saving", title = "Draw with S Pen")
         Column(Modifier.weight(1f).padding(horizontal = ScreenPadding)) {
-            TitleText("Draw with S Pen")
-            MetaText(RecapLabels.fullDate(date), Modifier.padding(top = 2.dp, bottom = 12.dp))
+            SmallText(RecapLabels.fullDate(date), Modifier.padding(top = 4.dp, bottom = 12.dp))
 
             Canvas(
                 Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .clip(TileShape)
-                    .border(1.dp, Palette.Hairline, TileShape)
+                    .clip(Corners.Frame)
+                    .border(1.dp, Palette.FrameLine, Corners.Frame)
                     .onSizeChanged { pageSize = it }
                     .semantics { contentDescription = "The page. Write or draw on it with the pen or a finger." }
                     .pointerInput(Unit) {
@@ -138,14 +137,22 @@ fun PenScreen(date: LocalDate, onDone: () -> Unit, onBack: () -> Unit) {
                     { if (strokes.isNotEmpty()) strokes.removeAt(strokes.lastIndex) },
                     Modifier.weight(1f),
                     enabled = strokes.isNotEmpty() && !saving,
+                    color = Palette.Ink,
                 )
-                QuietButton("Clear page", { strokes.clear() }, Modifier.weight(1f), enabled = strokes.isNotEmpty() && !saving)
+                QuietButton(
+                    "Clear page",
+                    { strokes.clear() },
+                    Modifier.weight(1f),
+                    enabled = strokes.isNotEmpty() && !saving,
+                    color = Palette.Ink,
+                )
             }
             RoseButton(
                 if (saving) "Saving…" else "Save page",
                 ::save,
                 Modifier.fillMaxWidth(),
                 enabled = strokes.isNotEmpty() && !saving,
+                icon = LineIcons.Check,
             )
         }
     }

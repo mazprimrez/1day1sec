@@ -1,6 +1,13 @@
 package com.onedayonesecond.ui.nav
 
-import androidx.compose.foundation.clickable
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.onedayonesecond.ui.backup.BackupViewModel
+import com.onedayonesecond.ui.compile.CompileViewModel
+import com.onedayonesecond.ui.settings.BackupScreen
+import com.onedayonesecond.ui.settings.ReelTextScreen
+import com.onedayonesecond.ui.settings.SettingsScreen
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -20,6 +27,12 @@ import androidx.compose.material3.Text
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,7 +43,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
@@ -55,7 +67,6 @@ import com.onedayonesecond.ui.recaps.RecapScreen
 import com.onedayonesecond.ui.recaps.RecapsScreen
 import com.onedayonesecond.ui.reel.ReelScreen
 import com.onedayonesecond.ui.theme.AppType
-import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.LineIcons
 import com.onedayonesecond.ui.about.AboutScreen
 import com.onedayonesecond.ui.books.AddBookScreen
@@ -96,6 +107,9 @@ fun AppNavHost() {
             }),
         )
     }
+    // The reel and the backup are each shown on more than one screen (the Reel tab, their
+    // own page, a line in Settings), so their view models belong to the activity.
+    val activity = checkNotNull(LocalViewModelStoreOwner.current)
     val backStack by navController.currentBackStackEntryAsState()
     val route = backStack?.destination?.route
 
@@ -107,7 +121,14 @@ fun AppNavHost() {
             // Not over the camera, where it would sit on the record button. A message
             // still waiting is shown again, with its Undo, on the next screen.
             message?.takeIf { route != Routes.CAMERA_PATTERN }?.let { shown ->
+                // Where a screen has a floating button, the message sits above it rather than on it.
+                val lift = when (route) {
+                    Routes.DAYS, Routes.BOOKS, Routes.REEL -> 72.dp
+                    Routes.DAY_PATTERN, Routes.BOOK_PATTERN -> 80.dp
+                    else -> 0.dp
+                }
                 MessageBar(
+                    modifier = Modifier.padding(bottom = lift),
                     message = shown,
                     onAction = { action ->
                         container.messages.dismiss(shown.id)
@@ -123,7 +144,7 @@ fun AppNavHost() {
         },
     ) { padding ->
         NavHost(navController = navController, startDestination = Routes.DAYS) {
-            destinations(navController, padding)
+            destinations(navController, padding, activity)
         }
     }
 }
@@ -148,7 +169,11 @@ private fun androidx.navigation.NavGraphBuilder.screen(
 }
 
 @UnstableApi
-private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostController, padding: PaddingValues) {
+private fun androidx.navigation.NavGraphBuilder.destinations(
+    nav: NavHostController,
+    padding: PaddingValues,
+    activity: ViewModelStoreOwner,
+) {
     val dateArg = listOf(navArgument(Routes.ARG_DATE) { type = NavType.LongType })
     fun androidx.navigation.NavBackStackEntry.date(): LocalDate =
         LocalDate.ofEpochDay(arguments!!.getLong(Routes.ARG_DATE))
@@ -181,7 +206,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
             onWrite = { nav.navigate(Routes.write(it)) },
             onVoice = { nav.navigate(Routes.voice(it)) },
             onDraw = { nav.navigate(Routes.pen(it)) },
-            onRecentlyDeleted = { nav.navigate(Routes.DELETED) },
+            onSettings = { nav.navigate(Routes.SETTINGS) },
         )
     }
 
@@ -189,6 +214,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         RecapsScreen(
             onOpenRecap = { nav.navigate(Routes.recap(it)) },
             onOpenPixels = { nav.navigate(Routes.pixels(it)) },
+            onSettings = { nav.navigate(Routes.SETTINGS) },
         )
     }
 
@@ -197,6 +223,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
             onAdd = { nav.navigate(Routes.ADD_BOOK) },
             onOpenBook = { nav.navigate(Routes.book(it)) },
             onLogThought = { nav.navigate(Routes.thought(it)) },
+            onSettings = { nav.navigate(Routes.SETTINGS) },
         )
     }
 
@@ -241,7 +268,41 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         )
     }
 
-    screen(Routes.REEL, padding) { ReelScreen(onAbout = { nav.navigate(Routes.ABOUT) }) }
+    screen(Routes.REEL, padding) {
+        ReelScreen(
+            onSettings = { nav.navigate(Routes.SETTINGS) },
+            onTextSettings = { nav.navigate(Routes.REEL_TEXT) },
+            onBackup = { nav.navigate(Routes.BACKUP) },
+            compile = viewModel(activity, factory = CompileViewModel.Factory),
+            backup = viewModel(activity, factory = BackupViewModel.Factory),
+        )
+    }
+
+    screen(Routes.SETTINGS, padding) {
+        SettingsScreen(
+            onBack = { nav.popBackStack() },
+            onTextSettings = { nav.navigate(Routes.REEL_TEXT) },
+            onBackup = { nav.navigate(Routes.BACKUP) },
+            onRecentlyDeleted = { nav.navigate(Routes.DELETED) },
+            onAbout = { nav.navigate(Routes.ABOUT) },
+            compile = viewModel(activity, factory = CompileViewModel.Factory),
+            backup = viewModel(activity, factory = BackupViewModel.Factory),
+        )
+    }
+
+    screen(Routes.REEL_TEXT, padding) {
+        ReelTextScreen(
+            onBack = { nav.popBackStack() },
+            compile = viewModel(activity, factory = CompileViewModel.Factory),
+        )
+    }
+
+    screen(Routes.BACKUP, padding) {
+        BackupScreen(
+            onBack = { nav.popBackStack() },
+            backup = viewModel(activity, factory = BackupViewModel.Factory),
+        )
+    }
 
     screen(Routes.ABOUT, padding) { AboutScreen(onBack = { nav.popBackStack() }) }
 
@@ -347,7 +408,7 @@ private fun androidx.navigation.NavGraphBuilder.destinations(nav: NavHostControl
         padding,
         listOf(navArgument(Routes.ARG_YEAR) { type = NavType.IntType }),
     ) {
-        PixelsScreen(onBack = { nav.popBackStack() })
+        PixelsScreen(onBack = { nav.popBackStack() }, onOpenDay = { nav.navigate(Routes.day(it)) })
     }
 }
 
@@ -360,40 +421,53 @@ private val Tabs = listOf(
     Tab(Routes.REEL, "Reel", LineIcons.Reel),
 )
 
+/** The four tabs, on a tinted bar. The tab that is open sits on a blush pill. */
 @Composable
 private fun TabBar(current: String?, nav: NavHostController) {
-    Column(Modifier.fillMaxWidth().navigationBarsPadding()) {
-        Hairline()
-        Row(Modifier.fillMaxWidth().height(64.dp)) {
-            Tabs.forEach { tab ->
-                val selected = tab.route == current
-                val color = if (selected) Palette.Ink else Palette.Muted
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(64.dp)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            role = Role.Tab,
-                        ) {
-                            if (!selected) {
-                                nav.navigate(tab.route) {
-                                    // One copy of each tab, and each keeps its own state
-                                    // (the month shown, the year shown) while away.
-                                    popUpTo(Routes.DAYS) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(Palette.BlushTint)
+            .navigationBarsPadding()
+            .height(80.dp)
+            .selectableGroup(),
+    ) {
+        Tabs.forEach { tab ->
+            val selected = tab.route == current
+            val color = if (selected) Palette.Ink else Palette.Muted
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .selectable(
+                        selected = selected,
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Tab,
+                    ) {
+                        if (!selected) {
+                            nav.navigate(tab.route) {
+                                // One copy of each tab, and each keeps its own state
+                                // (the month shown, the year shown) while away.
+                                popUpTo(Routes.DAYS) { saveState = true }
+                                launchSingleTop = true
+                                restoreState = true
                             }
                         }
-                        .semantics { this.selected = selected },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
+                    },
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Box(
+                    Modifier
+                        .size(width = 64.dp, height = 32.dp)
+                        .clip(CircleShape)
+                        .background(if (selected) Palette.Blush else Palette.BlushTint),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Icon(tab.icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
-                    Text(tab.label, style = AppType.Tab, color = color, modifier = Modifier.padding(top = 4.dp))
                 }
+                Text(tab.label, style = AppType.Tab, color = color, modifier = Modifier.padding(top = 4.dp))
             }
         }
     }

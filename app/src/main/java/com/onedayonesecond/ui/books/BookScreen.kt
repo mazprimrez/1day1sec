@@ -17,6 +17,18 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.onedayonesecond.ui.theme.FabClearance
+import com.onedayonesecond.ui.theme.FloatingAction
+import com.onedayonesecond.ui.theme.HeadlineText
+import com.onedayonesecond.ui.theme.ProgressLine
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.StateCard
+import com.onedayonesecond.ui.theme.TextAction
+import com.onedayonesecond.ui.theme.TintCard
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -52,27 +64,25 @@ import com.onedayonesecond.ui.theme.AppSheet
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BackBar
 import com.onedayonesecond.ui.theme.BodyText
-import com.onedayonesecond.ui.theme.ButtonShape
 import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.HeadingText
 import com.onedayonesecond.ui.theme.IconAction
 import com.onedayonesecond.ui.theme.LineIcons
 import com.onedayonesecond.ui.theme.MessageAction
 import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
 import com.onedayonesecond.ui.theme.QuietButton
 import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import com.onedayonesecond.ui.theme.appTextFieldColors
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * One book: where the bookmark is, and every thought logged on it, by page with the
- * furthest page first. The thoughts are the point of the page; the summary is a row
- * at the end of them.
+ * One book: where the bookmark is, the way to its summary, and every thought logged
+ * on it, by page with the furthest page first.
  */
 @UnstableApi
 @Composable
@@ -117,82 +127,90 @@ fun BookScreen(
     }
 
     val current = book
-    Column(Modifier.fillMaxSize()) {
-        BackBar(onBack, backLabel = "Back to your books") {
-            if (current != null) IconAction(LineIcons.More, "More for this book", { showMenu = true })
-        }
-        if (current == null) return@Column
-        val all = thoughts
-
-        LazyColumn(Modifier.weight(1f)) {
-            item(key = "header") { BookHeader(current, onCover = { changingCover = true }) }
-
-            if (all != null && all.isEmpty()) {
-                item(key = "first") {
-                    Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 28.dp)) {
-                        Hairline(Modifier.padding(bottom = 20.dp))
-                        HeadingText("Log your first thought")
-                        BodyText(
-                            "When a page stays with you, write a line about it, record a voice note, " +
-                                "or take a photo of the page.",
-                            Modifier.padding(top = 8.dp),
-                        )
-                    }
-                }
-            } else if (all != null) {
-                item(key = "thoughts-heading") {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(top = 28.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.Bottom,
-                    ) {
-                        HeadingText("Your thoughts, by page", Modifier.weight(1f))
-                        MetaText("Furthest page first")
-                    }
-                }
-                val shown = if (showAll) all else all.take(BookRules.THOUGHTS_SHOWN)
-                items(shown, key = { it.id }) { thought ->
-                    ThoughtRow(
-                        thought = thought,
-                        voice = voice,
-                        canTypeOut = container.thoughtProcessor.isConfigured,
-                        onRetry = { container.appScope.launch { container.bookActions.retry(thought) } },
-                        onView = { viewing = it },
-                        onMore = { thoughtMenu = thought },
-                    )
-                    Hairline(Modifier.padding(horizontal = ScreenPadding))
-                }
-                val hidden = all.size - shown.size
-                if (hidden > 0) {
-                    item(key = "earlier") {
-                        QuietButton(
-                            "Show $hidden earlier ${if (hidden == 1) "thought" else "thoughts"}",
-                            { showAll = true },
-                            Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp),
-                        )
-                    }
-                }
-                item(key = "summary") {
-                    Column(Modifier.padding(top = 8.dp)) {
-                        ActionRow(
-                            "Summary and review ideas",
-                            onSummary,
-                            subtitle = BookLabels.summaryLine(BookRules.withWords(all).size),
-                            trailing = {
-                                Icon(LineIcons.ChevronRight, contentDescription = null, tint = Palette.Muted)
-                            },
-                        )
-                        Hairline(Modifier.padding(horizontal = ScreenPadding))
-                    }
-                }
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize()) {
+            BackBar(onBack, backLabel = "Back to your books") {
+                if (current != null) IconAction(LineIcons.MoreVertical, "Book options", { showMenu = true })
             }
-            item(key = "end") { Spacer(Modifier.height(24.dp)) }
+            if (current == null) return@Column
+            val all = thoughts
+
+            LazyColumn(Modifier.weight(1f)) {
+                item(key = "header") { BookHeader(current, onCover = { changingCover = true }) }
+
+                if (all != null && all.isEmpty()) {
+                    item(key = "first") {
+                        StateCard("No thoughts yet", Modifier.padding(horizontal = ScreenPadding).padding(top = 24.dp)) {
+                            BodyText(
+                                "Stop at any page and write what stayed with you. Each thought is saved " +
+                                    "with its page number.",
+                            )
+                            RoseButton("Log your first thought", onAddThought, icon = LineIcons.Write)
+                        }
+                    }
+                } else if (all != null) {
+                    item(key = "summary") {
+                        TintCard(
+                            Modifier.padding(horizontal = ScreenPadding).padding(top = 20.dp),
+                            onClick = onSummary,
+                            padding = 16.dp,
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(LineIcons.Sparkle, contentDescription = null, tint = Palette.Rose, modifier = Modifier.size(24.dp))
+                                Column(Modifier.weight(1f).padding(horizontal = 16.dp)) {
+                                    Text("Summary and review ideas", style = AppType.Heading, color = Palette.Ink)
+                                    MetaText(BookLabels.summaryLine(BookRules.withWords(all).size))
+                                }
+                                Icon(LineIcons.ChevronRight, contentDescription = null, tint = Palette.Muted, modifier = Modifier.size(20.dp))
+                            }
+                        }
+                    }
+                    item(key = "thoughts-heading") {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(top = 24.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.Bottom,
+                        ) {
+                            HeadingText("Your thoughts, by page", Modifier.weight(1f))
+                            SmallText("Furthest page first", Modifier.padding(bottom = 3.dp))
+                        }
+                    }
+                    val shown = if (showAll) all else all.take(BookRules.THOUGHTS_SHOWN)
+                    items(shown, key = { it.id }) { thought ->
+                        Hairline(Modifier.padding(horizontal = ScreenPadding))
+                        ThoughtRow(
+                            thought = thought,
+                            voice = voice,
+                            canTypeOut = container.thoughtProcessor.isConfigured,
+                            onRetry = { container.appScope.launch { container.bookActions.retry(thought) } },
+                            onView = { viewing = it },
+                            onMore = { thoughtMenu = thought },
+                        )
+                    }
+                    val hidden = all.size - shown.size
+                    if (hidden > 0) {
+                        item(key = "earlier") {
+                            Hairline(Modifier.padding(horizontal = ScreenPadding))
+                            TextAction(
+                                "Show $hidden earlier ${if (hidden == 1) "thought" else "thoughts"}",
+                                { showAll = true },
+                                Modifier.padding(start = 12.dp, top = 4.dp),
+                            )
+                        }
+                    }
+                }
+                item(key = "end") { Spacer(Modifier.height(FabClearance)) }
+            }
         }
 
-        RoseButton(
-            "Add a thought",
-            onAddThought,
-            Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(top = 8.dp, bottom = 12.dp),
-        )
+        // The first thought has its own rose button in the card; after that it floats.
+        if (current != null && !thoughts.isNullOrEmpty()) {
+            FloatingAction(
+                "Add a thought",
+                LineIcons.Write,
+                onAddThought,
+                Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 24.dp),
+            )
+        }
     }
 
     if (current != null) {
@@ -231,19 +249,17 @@ fun BookScreen(
         }
         if (changingCover) {
             AppSheet(onDismiss = { changingCover = false }, title = "Change cover") {
-                val divider = Modifier.padding(horizontal = ScreenPadding)
-                ActionRow("Take a photo of your copy", { changingCover = false; photos.take() }, icon = LineIcons.Image)
-                Hairline(divider)
+                ActionRow("Take a photo of your copy", { changingCover = false; photos.take() }, icon = LineIcons.Camera)
                 ActionRow("Choose from your photos", { changingCover = false; photos.choose() }, icon = LineIcons.Image)
                 if (current.coverPath != null) {
-                    Hairline(divider)
                     ActionRow(
                         "Use no cover",
                         {
                             changingCover = false
                             scope.launch { container.books.setCover(current, null) }
                         },
-                        subtitle = "The title is printed on a plain cover instead.",
+                        subtitle = "The title is printed on a blush cover instead.",
+                        icon = LineIcons.Text,
                     )
                 }
             }
@@ -254,6 +270,7 @@ fun BookScreen(
                 onDismiss = { removing = false },
                 title = "Remove ${current.title}?",
                 buttons = {
+                    TextAction("Keep it", { removing = false })
                     QuietButton(
                         "Remove",
                         {
@@ -265,8 +282,8 @@ fun BookScreen(
                             }
                             onBack()
                         },
+                        color = Palette.Error,
                     )
-                    RoseButton("Keep", { removing = false })
                 },
             ) {
                 BodyText(
@@ -285,15 +302,19 @@ fun BookScreen(
         AppSheet(
             onDismiss = { thoughtMenu = null },
             title = "Page ${thought.page}",
-            meta = BookLabels.moment(thought.createdAt),
+            meta = BookLabels.logged(thought),
         ) {
             ActionRow(
                 if (thought.text.isNullOrEmpty()) "Edit the page, or add words" else "Edit the page or the words",
                 { thoughtMenu = null; editingThought = thought },
                 icon = LineIcons.Write,
             )
-            Hairline(Modifier.padding(horizontal = ScreenPadding))
-            ActionRow("Delete this thought", { thoughtMenu = null; deletingThought = thought }, icon = LineIcons.Trash)
+            ActionRow(
+                "Delete this thought",
+                { thoughtMenu = null; deletingThought = thought },
+                icon = LineIcons.Trash,
+                titleColor = Palette.Error,
+            )
         }
     }
     editingThought?.let { thought ->
@@ -313,14 +334,15 @@ fun BookScreen(
             onDismiss = { deletingThought = null },
             title = "Delete this thought?",
             buttons = {
+                TextAction("Keep it", { deletingThought = null })
                 QuietButton(
                     "Delete",
                     {
                         deletingThought = null
                         scope.launch { container.books.deleteThought(thought) }
                     },
+                    color = Palette.Error,
                 )
-                RoseButton("Keep", { deletingThought = null })
             },
         ) {
             BodyText(
@@ -332,14 +354,17 @@ fun BookScreen(
     viewing?.let { file -> PhotoViewer(file, onDismiss = { viewing = null }) }
 }
 
-/** Cover on the left; title, author and the bookmark on the right. */
+/** Cover on the left; title, author and the bookmark on the right, level with the cover's foot. */
 @Composable
 private fun BookHeader(book: Book, onCover: () -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(top = 4.dp)) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = ScreenPadding).padding(top = 4.dp),
+        verticalAlignment = Alignment.Bottom,
+    ) {
         BookCover(
             book,
             Modifier
-                .width(132.dp)
+                .width(112.dp)
                 .aspectRatio(COVER_ASPECT)
                 .clickable(
                     onClickLabel = if (book.coverPath == null) "Use a photo of your copy" else "Change the cover",
@@ -349,32 +374,23 @@ private fun BookHeader(book: Book, onCover: () -> Unit) {
                 .semantics { contentDescription = "Cover of ${book.title}" },
             maxSidePx = 768,
         )
-        Column(Modifier.weight(1f).padding(start = 16.dp)) {
-            TitleText(book.title, Modifier.semantics { heading() })
-            book.author?.let { MetaText(it, Modifier.padding(top = 4.dp)) }
+        Column(Modifier.weight(1f).padding(start = 20.dp)) {
+            HeadlineText(book.title, Modifier.semantics { heading() })
+            book.author?.let { MetaText(it, Modifier.padding(top = 2.dp)) }
 
             val total = book.totalPages?.takeIf { it > 0 }
-            val bookmark = when {
-                book.currentPage <= 0 -> "Not started yet"
-                total != null -> "On page ${book.currentPage} of $total"
-                else -> "On page ${book.currentPage}"
+            if (book.currentPage > 0) {
+                PageCount(book, Modifier.padding(top = 12.dp), style = AppType.NumeralLarge)
+            } else {
+                MetaText(if (total != null) "Not started · $total pages" else "Not started", Modifier.padding(top = 12.dp))
             }
-            // Read aloud as one line; the big figure and its caption are one fact.
-            Column(Modifier.padding(top = 12.dp).semantics(mergeDescendants = true) { contentDescription = bookmark }) {
-                if (book.currentPage > 0) {
-                    Text(book.currentPage.toString(), style = BigPage, color = Palette.Ink)
-                    MetaText(if (total != null) "of $total pages" else "your current page")
-                } else {
-                    MetaText(if (total != null) "$total pages. Not started yet." else "Not started yet.")
-                }
-            }
-            BookRules.progress(book)?.let { ProgressLine(it, Modifier.padding(top = 10.dp)) }
-            MetaText(
+            BookRules.progress(book)?.let { ProgressLine(it, Modifier.padding(top = 6.dp)) }
+            SmallText(
                 buildString {
                     append("Started ").append(BookLabels.day(book.startedOn))
-                    book.finishedOn?.let { append("\nFinished ").append(BookLabels.day(it)) }
+                    book.finishedOn?.let { append(" · finished ").append(BookLabels.day(it)) }
                 },
-                Modifier.padding(top = 10.dp),
+                Modifier.padding(top = 8.dp),
             )
         }
     }
@@ -391,14 +407,13 @@ private fun ThoughtRow(
     onMore: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth().padding(start = ScreenPadding, end = 4.dp, top = 16.dp, bottom = 16.dp)) {
-        Text(
-            thought.page.toString(),
-            style = ThoughtPage,
-            color = Palette.Ink,
-            modifier = Modifier.width(52.dp).semantics { contentDescription = "Page ${thought.page}" },
-        )
-        Column(Modifier.weight(1f)) {
-            MetaText(BookLabels.moment(thought.createdAt))
+        // The page is a measurement, so it is set like one, with its unit under it.
+        Column(Modifier.width(56.dp).clearAndSetSemantics { contentDescription = "Page ${thought.page}" }) {
+            Text(thought.page.toString(), style = AppType.NumeralMedium, color = Palette.Rose)
+            Text("PAGE", style = AppType.LabelSmall, color = Palette.Muted)
+        }
+        Column(Modifier.weight(1f).padding(start = 12.dp)) {
+            SmallText(BookLabels.logged(thought))
             ThoughtBody(
                 thought = thought,
                 voice = voice,
@@ -406,10 +421,16 @@ private fun ThoughtRow(
                 canTypeOut = canTypeOut,
                 onRetry = onRetry,
                 onView = onView,
-                modifier = Modifier.padding(top = 6.dp),
+                modifier = Modifier.padding(top = 4.dp),
             )
         }
-        IconAction(LineIcons.More, "More for your thought on page ${thought.page}", onMore, tint = Palette.Muted)
+        IconAction(
+            LineIcons.More,
+            "More for your thought on page ${thought.page}",
+            onMore,
+            Modifier.offset(y = (-12).dp),
+            tint = Palette.Muted,
+        )
     }
 }
 
@@ -422,7 +443,6 @@ private fun BookMenu(
     onRemove: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val divider = Modifier.padding(horizontal = ScreenPadding)
     AppSheet(onDismiss = onDismiss, title = book.title, meta = book.author) {
         if (book.status == BookStatus.READING) {
             ActionRow(
@@ -434,14 +454,15 @@ private fun BookMenu(
         } else {
             ActionRow("Read it again", onFinish, subtitle = "It moves back to Reading now.", icon = LineIcons.Books)
         }
-        Hairline(divider)
         ActionRow("Edit book", onEdit, subtitle = "Title, author, pages, where your bookmark is.", icon = LineIcons.Write)
-        Hairline(divider)
         ActionRow("Change cover", onCover, icon = LineIcons.Image)
-        Spacer(Modifier.height(16.dp))
-        Hairline()
-        Spacer(Modifier.height(8.dp))
-        ActionRow("Remove book", onRemove, subtitle = "Deletes the book and your thoughts on it.", icon = LineIcons.Trash)
+        ActionRow(
+            "Remove book",
+            onRemove,
+            subtitle = "Deletes the book and your thoughts on it.",
+            icon = LineIcons.Trash,
+            titleColor = Palette.Error,
+        )
     }
 }
 
@@ -460,7 +481,7 @@ private fun EditBookDialog(book: Book, onSave: (BookDetails, Int) -> Unit, onDis
         onDismiss = onDismiss,
         title = "Edit book",
         buttons = {
-            QuietButton("Cancel", onDismiss)
+            TextAction("Cancel", onDismiss)
             RoseButton(
                 "Save",
                 {
@@ -516,7 +537,7 @@ private fun EditThoughtDialog(
         onDismiss = onDismiss,
         title = "Edit thought",
         buttons = {
-            QuietButton("Cancel", onDismiss)
+            TextAction("Cancel", onDismiss)
             RoseButton("Save", { typed?.let { onSave(it, text) } }, enabled = valid)
         },
     ) {
@@ -533,7 +554,7 @@ private fun EditThoughtDialog(
                 onValueChange = { text = it },
                 placeholder = { Text("What stayed with you on this page?", style = AppType.Body, color = Palette.Muted) },
                 textStyle = AppType.Body,
-                shape = ButtonShape,
+                shape = Corners.Field,
                 colors = appTextFieldColors(),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
                 minLines = 4,

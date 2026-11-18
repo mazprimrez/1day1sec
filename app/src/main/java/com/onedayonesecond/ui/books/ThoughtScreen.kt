@@ -20,13 +20,27 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import com.onedayonesecond.ui.theme.AssistChip
+import com.onedayonesecond.ui.theme.SmallText
+import com.onedayonesecond.ui.theme.StateCard
+import com.onedayonesecond.ui.theme.SwitchRow
+import com.onedayonesecond.ui.theme.TextAction
+import com.onedayonesecond.ui.theme.TonalButton
+import com.onedayonesecond.ui.theme.BodyText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -40,7 +54,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -49,7 +62,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -73,16 +85,11 @@ import com.onedayonesecond.ui.theme.ActionRow
 import com.onedayonesecond.ui.theme.AppSheet
 import com.onedayonesecond.ui.theme.AppType
 import com.onedayonesecond.ui.theme.BackBar
-import com.onedayonesecond.ui.theme.ButtonShape
-import com.onedayonesecond.ui.theme.Hairline
 import com.onedayonesecond.ui.theme.IconAction
 import com.onedayonesecond.ui.theme.LineIcons
-import com.onedayonesecond.ui.theme.MetaText
+import com.onedayonesecond.ui.theme.Corners
 import com.onedayonesecond.ui.theme.Palette
-import com.onedayonesecond.ui.theme.QuietButton
-import com.onedayonesecond.ui.theme.RoseButton
 import com.onedayonesecond.ui.theme.ScreenPadding
-import com.onedayonesecond.ui.theme.TitleText
 import com.onedayonesecond.ui.theme.appTextFieldColors
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -293,25 +300,32 @@ fun ThoughtScreen(
     BackHandler(onBack = onClose)
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        BackBar(onClose, backLabel = "Close. What you've started is kept.")
+        BackBar(
+            onClose,
+            backLabel = "Close. What you've started is kept.",
+            title = "Log a thought",
+            backIcon = LineIcons.Close,
+        ) {
+            TextAction(if (saving) "Saving…" else "Save", ::save, enabled = canSave)
+        }
         if (books != null && book == null) {
             // The book was removed while this was open.
-            Column(Modifier.padding(horizontal = ScreenPadding)) {
-                TitleText("Log a thought")
-                MetaText("That book is no longer on your shelf.", Modifier.padding(top = 8.dp))
-                QuietButton("Back", onClose, Modifier.padding(top = 16.dp))
+            StateCard("That book is no longer on your shelf", Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp)) {
+                BodyText("It was removed while this page was open, so there is nowhere to save a thought.")
+                TextAction("Back to your books", onClose, Modifier.offset(x = (-12).dp))
             }
             return@Column
         }
         if (book == null) return@Column
         val reading = books.orEmpty().filter { it.status == BookStatus.READING || it.id == book.id }
+        val inset = Modifier.padding(horizontal = ScreenPadding)
 
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = ScreenPadding)) {
-            TitleText("Log a thought")
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+            // Which book: its cover, its title, and where the bookmark is now.
             Row(
-                Modifier
-                    .padding(top = 2.dp)
-                    .defaultMinSize(minHeight = 48.dp)
+                inset
+                    .fillMaxWidth()
+                    .defaultMinSize(minHeight = 56.dp)
                     .clickable(
                         enabled = reading.size > 1,
                         onClickLabel = "Choose another book",
@@ -320,100 +334,99 @@ fun ThoughtScreen(
                     .semantics(mergeDescendants = true) { contentDescription = "Book: ${book.title}" },
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(book.title, style = AppType.BodyStrong, color = Palette.Ink, modifier = Modifier.weight(1f, fill = false))
+                BookCover(book, Modifier.width(36.dp).aspectRatio(COVER_ASPECT), maxSidePx = 192)
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text(book.title, style = AppType.Heading, color = Palette.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    SmallText(if (book.currentPage > 0) "Bookmark on page ${book.currentPage}" else "Not started yet")
+                }
                 if (reading.size > 1) {
-                    Icon(
-                        LineIcons.ChevronDown,
-                        contentDescription = null,
-                        tint = Palette.Muted,
-                        modifier = Modifier.padding(start = 6.dp).size(20.dp),
-                    )
+                    Icon(LineIcons.ChevronDown, contentDescription = null, tint = Palette.Muted, modifier = Modifier.size(20.dp))
                 }
             }
 
-            // The page: a large number with a button either side.
+            // The page: a field for the number, with a step either side for the common case of one page on.
             val last = BookRules.lastPage(book)
-            Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            val clamped = pageNumber?.let { BookRules.clampPage(book, it) }
+            Row(inset.padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    value = page,
+                    onValueChange = { typed -> page = typed.filter(Char::isDigit).take(4) },
+                    label = { Text("Page") },
+                    singleLine = true,
+                    textStyle = AppType.NumeralMedium.copy(fontSize = 16.sp),
+                    shape = Corners.Field,
+                    colors = appTextFieldColors(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
+                    modifier = Modifier.weight(1f),
+                )
                 IconAction(
                     LineIcons.Minus,
                     "One page earlier",
                     { page = ((pageNumber ?: 1) - 1).coerceIn(1, last).toString() },
+                    Modifier.padding(start = 4.dp, top = 8.dp),
                     enabled = (pageNumber ?: 1) > 1,
-                )
-                BasicTextField(
-                    value = page,
-                    onValueChange = { typed -> page = typed.filter(Char::isDigit).take(4) },
-                    textStyle = PageField.copy(color = Palette.Ink, textAlign = TextAlign.Center),
-                    singleLine = true,
-                    cursorBrush = SolidColor(Palette.Rose),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier
-                        .width(132.dp)
-                        .defaultMinSize(minHeight = 48.dp)
-                        .semantics { contentDescription = "Page number" },
                 )
                 IconAction(
                     LineIcons.Plus,
                     "One page later",
                     { page = ((pageNumber ?: 0) + 1).coerceIn(1, last).toString() },
+                    Modifier.padding(top = 8.dp).offset(x = 8.dp),
                     enabled = (pageNumber ?: 0) < last,
                 )
             }
-            Hairline(Modifier.padding(top = 4.dp))
-            MetaText(
+            SmallText(
                 when {
                     pageNumber != null && book.totalPages != null && book.totalPages > 0 && pageNumber > book.totalPages ->
                         "This edition has ${book.totalPages} pages. If yours has more, change it under Edit book."
-                    book.currentPage > 0 -> "You were on page ${book.currentPage}. Earlier pages don't move your bookmark."
+                    clamped != null && BookRules.movesBookmark(book, clamped) ->
+                        "Saving moves your bookmark to $clamped. Earlier pages don't move it."
+                    book.currentPage > 0 -> "Your bookmark stays on ${book.currentPage}. Earlier pages don't move it."
                     else -> "The page you're on. Saving puts your bookmark there."
                 },
-                Modifier.padding(top = 8.dp),
+                inset.padding(start = 16.dp, top = 4.dp).semantics { liveRegion = LiveRegionMode.Polite },
             )
 
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it },
+                label = { Text("Your thought") },
                 placeholder = { Text("What stayed with you on this page?", style = AppType.Body, color = Palette.Muted) },
                 textStyle = AppType.Body,
-                shape = ButtonShape,
+                shape = Corners.Field,
                 colors = appTextFieldColors(),
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                minLines = 4,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp)
-                    .semantics { contentDescription = "What stayed with you on this page?" },
+                modifier = inset.fillMaxWidth().padding(top = 24.dp).defaultMinSize(minHeight = 160.dp),
             )
 
             // One attachment: a photo of the page, or a voice note.
             val attached = mediaPath?.let(::File)
             when {
-                recording -> Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                recording -> Row(inset.padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(Palette.Rose).clearAndSetSemantics { })
                     Text(
                         formatClock(elapsedMs),
-                        style = AppType.BodyStrong,
-                        color = Palette.Rose,
-                        modifier = Modifier.padding(end = 16.dp).semantics { contentDescription = "Recording" },
+                        style = AppType.Timecode,
+                        color = Palette.Ink,
+                        modifier = Modifier.padding(start = 8.dp, end = 16.dp).semantics { contentDescription = "Recording" },
                     )
-                    QuietButton("Stop and keep", ::stopRecording)
-                    QuietButton(
+                    TonalButton("Stop and keep", ::stopRecording)
+                    TextAction(
                         "Discard",
                         {
                             recording = false
                             recorder.discard()
                         },
-                        Modifier.padding(start = 8.dp),
-                        color = Palette.Muted,
+                        color = Palette.Ink,
                     )
                 }
 
                 attached != null && mediaType == ThoughtType.VOICE ->
-                    Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(inset.padding(top = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             VoiceChip(DRAFT_VOICE_ID, attached, voice)
-                            QuietButton("Remove", ::removeAttachment, Modifier.padding(start = 12.dp), color = Palette.Muted)
+                            TextAction("Remove", ::removeAttachment, color = Palette.Ink)
                         }
-                        MetaText(
+                        SmallText(
                             if (text.isBlank()) {
                                 "What you said is written out after you save."
                             } else {
@@ -422,66 +435,47 @@ fun ThoughtScreen(
                         )
                     }
 
-                attached != null -> Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                attached != null -> Row(inset.padding(top = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                     JournalImage(
                         file = attached,
                         description = "The photo of the page",
-                        modifier = Modifier.width(72.dp).aspectRatio(PHOTO_ASPECT),
+                        modifier = Modifier.width(60.dp).aspectRatio(PHOTO_ASPECT),
                     )
-                    QuietButton("Remove", ::removeAttachment, Modifier.padding(start = 12.dp), color = Palette.Muted)
+                    TextAction("Remove", ::removeAttachment, Modifier.padding(start = 4.dp), color = Palette.Ink)
                 }
 
-                else -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    QuietButton("Photo of the page", { photoSheet = true }, Modifier.weight(1f))
-                    QuietButton(
+                else -> Row(inset.padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AssistChip("Photo of the page", LineIcons.Camera, { photoSheet = true })
+                    AssistChip(
                         "Voice note",
+                        LineIcons.Mic,
                         {
                             val allowed = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
                                 PackageManager.PERMISSION_GRANTED
                             if (allowed) startRecording() else microphone.launch(Manifest.permission.RECORD_AUDIO)
                         },
-                        Modifier.weight(1f),
                     )
                 }
             }
 
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-                    .defaultMinSize(minHeight = 48.dp)
-                    .toggleable(value = showInDiary, role = Role.Checkbox) { showInDiary = it },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CheckMark(showInDiary)
-                Column(Modifier.padding(start = 12.dp)) {
-                    Text("Also show it in today's diary", style = AppType.Body, color = Palette.Ink)
-                    MetaText("It appears on today's page and links back to the book.")
-                }
-            }
-            Spacer(Modifier.height(12.dp))
-        }
-
-        Column(Modifier.padding(horizontal = ScreenPadding).padding(top = 8.dp, bottom = 12.dp)) {
-            RoseButton(if (saving) "Saving…" else "Save thought", ::save, Modifier.fillMaxWidth(), enabled = canSave)
-            val note = when {
-                !hasContent -> "Write a line, record a voice note or add a photo of the page first."
-                pageNumber != null && BookRules.movesBookmark(book, BookRules.clampPage(book, pageNumber)) ->
-                    "Saving moves your bookmark to page ${BookRules.clampPage(book, pageNumber)}"
-                else -> null
-            }
-            if (note != null) {
-                MetaText(
-                    note,
-                    Modifier.fillMaxWidth().padding(top = 8.dp).semantics { liveRegion = LiveRegionMode.Polite },
+            SwitchRow(
+                "Also show it in today's diary",
+                showInDiary,
+                { showInDiary = it },
+                Modifier.padding(top = 16.dp),
+            )
+            if (!hasContent) {
+                SmallText(
+                    "Write a line, record a voice note or add a photo of the page, then save.",
+                    inset.padding(top = 4.dp),
                 )
             }
+            Spacer(Modifier.height(24.dp))
         }
 
         if (picking) {
             AppSheet(onDismiss = { picking = false }, title = "Which book?") {
-                reading.forEachIndexed { index, other ->
-                    if (index > 0) Hairline(Modifier.padding(horizontal = ScreenPadding))
+                reading.forEach { other ->
                     ActionRow(
                         other.title,
                         { switchTo(other) },
@@ -497,8 +491,7 @@ fun ThoughtScreen(
         }
         if (photoSheet) {
             AppSheet(onDismiss = { photoSheet = false }, title = "Photo of the page") {
-                ActionRow("Take a photo", { photoSheet = false; photos.take() }, icon = LineIcons.Image)
-                Hairline(Modifier.padding(horizontal = ScreenPadding))
+                ActionRow("Take a photo", { photoSheet = false; photos.take() }, icon = LineIcons.Camera)
                 ActionRow("Choose from your photos", { photoSheet = false; photos.choose() }, icon = LineIcons.Image)
             }
         }

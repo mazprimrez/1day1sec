@@ -1,5 +1,10 @@
 package com.onedayonesecond.ui.backup
 
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.lifecycle.ViewModel
@@ -33,6 +38,10 @@ data class BackupUiState(
     val phase: BackupPhase = BackupPhase.IDLE,
     val action: BackupAction? = null,
     val clipCount: Int = 0,
+    val entryCount: Int = 0,
+    val bookCount: Int = 0,
+    /** When the last backup finished, in epoch milliseconds. Null before the first. */
+    val lastBackupAt: Long? = null,
     /** False when the phone has no second, journal day or recap to back up. */
     val hasAnything: Boolean = false,
     val done: Int = 0,
@@ -46,6 +55,42 @@ data class BackupUiState(
     val consent: PendingIntent? = null,
 )
 
+/** How the backup's state reads in a line: on the Reel tab, in Settings, and on the backup page. */
+object BackupLabels {
+    private val clock = DateTimeFormatter.ofPattern("HH:mm", Locale.ENGLISH)
+    private val dayMonth = DateTimeFormatter.ofPattern("d MMMM", Locale.ENGLISH)
+    private val dayMonthYear = DateTimeFormatter.ofPattern("d MMMM yyyy", Locale.ENGLISH)
+
+    /**
+     * "Backed up today at 09:12", "Backed up yesterday at 21:40", "Backed up on 14 November".
+     * With no time on record it says what the backup is rather than "never": the time has
+     * only been kept since this page was added, so an earlier backup would be unknown here.
+     */
+    fun lastBackup(at: Long?, now: LocalDateTime = LocalDateTime.now(), zone: ZoneId = ZoneId.systemDefault()): String {
+        if (at == null) return "Keeps a copy in your own Google Drive"
+        val time = Instant.ofEpochMilli(at).atZone(zone).toLocalDateTime()
+        val today = now.toLocalDate()
+        return when (time.toLocalDate()) {
+            today -> "Backed up today at ${time.format(clock)}"
+            today.minusDays(1) -> "Backed up yesterday at ${time.format(clock)}"
+            else -> "Backed up on ${time.format(if (time.year == today.year) dayMonth else dayMonthYear)}"
+        }
+    }
+
+    /** The line under "Google Drive backup": what is happening now, else how the last run went. */
+    fun status(state: BackupUiState): String = when {
+        state.phase == BackupPhase.AUTHORIZING -> "Connecting to Google…"
+        state.phase == BackupPhase.WORKING && state.total > 0 -> "Working, ${state.done} of ${state.total}"
+        state.phase == BackupPhase.WORKING -> "Looking at what is in Drive…"
+        state.error != null -> "The last run didn't finish"
+        else -> lastBackup(state.lastBackupAt)
+    }
+}
+
+/**
+ * Kept by the activity rather than by one screen, so a backup started on the backup
+ * page goes on while the rest of the app is used.
+ */
 class BackupViewModel(private val container: AppContainer) : ViewModel() {
 
     private val _state = MutableStateFlow(BackupUiState())
@@ -58,6 +103,9 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
 
     init {
         refreshCount()
+        viewModelScope.launch {
+            container.journalPrefs.lastBackupAt.collect { at -> _state.update { it.copy(lastBackupAt = at) } }
+        }
     }
 
     fun start(action: BackupAction) {
@@ -120,7 +168,11 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
         }
 
         val notice = when (action) {
-            BackupAction.BACKUP -> describe(container.driveBackup.backup(accessToken, onProgress))
+            BackupAction.BACKUP -> {
+                val summary = container.driveBackup.backup(accessToken, onProgress)
+                if (!summary.nothingToDo) container.journalPrefs.setLastBackupAt(System.currentTimeMillis())
+                describe(summary)
+            }
             BackupAction.RESTORE -> describe(container.driveBackup.restore(accessToken, onProgress))
         }
 
@@ -136,8 +188,10 @@ class BackupViewModel(private val container: AppContainer) : ViewModel() {
     fun refreshCount() {
         viewModelScope.launch {
             val count = container.driveBackup.clipCount()
+            val entries = container.journal.allEntries().size
+            val books = container.books.allBooks().size
             val any = container.driveBackup.hasAnything()
-            _state.update { it.copy(clipCount = count, hasAnything = any) }
+            _state.update { it.copy(clipCount = count, entryCount = entries, bookCount = books, hasAnything = any) }
         }
     }
 
