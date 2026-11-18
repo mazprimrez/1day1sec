@@ -95,6 +95,53 @@ on every request, and that is what keeps everyone else out.
 The command prints the service's address. Put it in the app's `local.properties` as
 `journal.backend.url`.
 
+### Deploying on every push
+
+After that first deploy, `.github/workflows/deploy-backend.yml` does it: a push to
+`main` that changes anything under `backend/` (other than this README) runs the
+tests, and if they pass, builds the image, pushes it and updates the service. The
+service's settings (environment variables, its account) are left as they are; change
+those with `gcloud run services update`. Runs are listed under the repository's
+*Actions* tab.
+
+GitHub signs in to Google Cloud without a stored key, through Workload Identity
+Federation. Set up once per project (`REPO_ID` is the repository's number, from
+`https://api.github.com/repos/<owner>/<repo>`):
+
+```
+NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
+DEPLOYER=github-deployer@$PROJECT.iam.gserviceaccount.com
+
+gcloud services enable sts.googleapis.com iamcredentials.googleapis.com --project $PROJECT
+gcloud iam service-accounts create github-deployer --project $PROJECT
+
+# What the deployer may do: update Cloud Run services, push images, and run the
+# service as its own account. Nothing else.
+gcloud projects add-iam-policy-binding $PROJECT \
+  --member serviceAccount:$DEPLOYER --role roles/run.developer
+gcloud artifacts repositories add-iam-policy-binding cloud-run-source-deploy \
+  --project $PROJECT --location asia-southeast2 \
+  --member serviceAccount:$DEPLOYER --role roles/artifactregistry.writer
+gcloud iam service-accounts add-iam-policy-binding \
+  journal-backend@$PROJECT.iam.gserviceaccount.com --project $PROJECT \
+  --member serviceAccount:$DEPLOYER --role roles/iam.serviceAccountUser
+
+# Who may sign in as the deployer: this repository's main branch only.
+gcloud iam workload-identity-pools create github --project $PROJECT --location global
+gcloud iam workload-identity-pools providers create-oidc kilasan \
+  --project $PROJECT --location global --workload-identity-pool github \
+  --issuer-uri https://token.actions.githubusercontent.com \
+  --attribute-mapping "google.subject=assertion.sub,attribute.repository_id=assertion.repository_id,attribute.ref=assertion.ref" \
+  --attribute-condition "assertion.repository_id == '$REPO_ID' && assertion.ref == 'refs/heads/main'"
+gcloud iam service-accounts add-iam-policy-binding $DEPLOYER --project $PROJECT \
+  --role roles/iam.workloadIdentityUser \
+  --member "principalSet://iam.googleapis.com/projects/$NUMBER/locations/global/workloadIdentityPools/github/attribute.repository_id/$REPO_ID"
+```
+
+The project number, the pool and the deployer's name are written in the workflow
+file. None of them is a secret. To stop automatic deploys, delete the workflow file
+or the `github` pool.
+
 ## Run it on this machine
 
 ```
